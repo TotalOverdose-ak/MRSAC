@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 920" width="520" height="920" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="inputGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="convGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="poolGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="flatGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="denseGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="dropGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#94a3b8"/>
+    </linearGradient>
+    <linearGradient id="outGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="520" height="920" rx="16" fill="url(#bgGrad)"/>
+
+  <!-- Title -->
+  <text x="260" y="42" text-anchor="middle" fill="#f1f5f9" font-size="20" font-weight="700">1D-CNN Model Architecture</text>
+  <text x="260" y="62" text-anchor="middle" fill="#94a3b8" font-size="12">LULC Pixel-wise Classification</text>
+
+  <!-- ===== BLOCKS ===== -->
+
+  <!-- 1. Input -->
+  <rect x="110" y="82" width="300" height="52" rx="10" fill="url(#inputGrad)" filter="url(#shadow)"/>
+  <text x="260" y="106" text-anchor="middle" fill="#fff" font-size="14" font-weight="600">Input</text>
+  <text x="260" y="124" text-anchor="middle" fill="#e0e7ff" font-size="11">(10 bands × 1 channel)</text>
+
+  <!-- Arrow 1 -->
+  <line x1="260" y1="134" x2="260" y2="156" stroke="#475569" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- 2. Conv1D - 32 -->
+  <rect x="110" y="156" width="300" height="52" rx="10" fill="url(#convGrad)" filter="url(#shadow)"/>
+  <text x="260" y="180" text-anchor="middle" fill="#fff" font-size="14" font-weight="600">Conv1D</text>
+  <text x="260" y="198" text-anchor="middle" fill="#dbeafe" font-size="11">32 filters · kernel = 2 · ReLU</text>
+
+  <!-- Arrow 2 -->
+  <line x1="260" y1="208" x2="260" y2="230" stroke="#475569" stroke-width="2"/>
+
+  <!-- 3. MaxPool 1 -->
+  <rect x="140" y="230" width="240" height="44" rx="10" fill="url(#poolGrad)" filter="url(#shadow)"/>
+  <text x="260" y="257" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">MaxPooling1D (pool = 2)</text>
+
+  <!-- Arrow 3 -->
+  <line x1="260" y1="274" x2="260" y2="296" stroke="#475569" stroke-width="2"/>
+
+  <!-- 4. Conv1D - 64 -->
+  <rect x="110" y="296" width="300" height="52" rx="10" fill="url(#convGrad)" filter="url(#shadow)"/>
+  <text x="260" y="320" text-anchor="middle" fill="#fff" font-size="14" font-weight="600">Conv1D</text>
+  <text x="260" y="338" text-anchor="middle" fill="#dbeafe" font-size="11">64 filters · kernel = 2 · ReLU</text>
+
+  <!-- Arrow 4 -->
+  <line x1="260" y1="348" x2="260" y2="370" stroke="#475569" stroke-width="2"/>
+
+  <!-- 5. MaxPool 2 -->
+  <rect x="140" y="370" width="240" height="44" rx="10" fill="url(#poolGrad)" filter="url(#shadow)"/>
+  <text x="260" y="397" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">MaxPooling1D (pool = 2)</text>
+
+  <!-- Arrow 5 -->
+  <line x1="260" y1="414" x2="260" y2="436" stroke="#475569" stroke-width="2"/>
+
+  <!-- 6. Flatten -->
+  <rect x="160" y="436" width="200" height="40" rx="10" fill="url(#flatGrad)" filter="url(#shadow)"/>
+  <text x="260" y="461" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">Flatten</text>
+
+  <!-- Arrow 6 -->
+  <line x1="260" y1="476" x2="260" y2="498" stroke="#475569" stroke-width="2"/>
+
+  <!-- 7. Dense 128 -->
+  <rect x="110" y="498" width="300" height="52" rx="10" fill="url(#denseGrad)" filter="url(#shadow)"/>
+  <text x="260" y="522" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="600">Dense (128)</text>
+  <text x="260" y="540" text-anchor="middle" fill="#451a03" font-size="11">128 neurons · ReLU</text>
+
+  <!-- Arrow 7 -->
+  <line x1="260" y1="550" x2="260" y2="572" stroke="#475569" stroke-width="2"/>
+
+  <!-- 8. Dropout -->
+  <rect x="160" y="572" width="200" height="40" rx="10" fill="url(#dropGrad)" filter="url(#shadow)"/>
+  <text x="260" y="597" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">Dropout (0.3)</text>
+
+  <!-- Arrow 8 -->
+  <line x1="260" y1="612" x2="260" y2="634" stroke="#475569" stroke-width="2"/>
+
+  <!-- 9. Dense 64 -->
+  <rect x="110" y="634" width="300" height="52" rx="10" fill="url(#denseGrad)" filter="url(#shadow)"/>
+  <text x="260" y="658" text-anchor="middle" fill="#1e293b" font-size="14" font-weight="600">Dense (64)</text>
+  <text x="260" y="676" text-anchor="middle" fill="#451a03" font-size="11">64 neurons · ReLU</text>
+
+  <!-- Arrow 9 -->
+  <line x1="260" y1="686" x2="260" y2="708" stroke="#475569" stroke-width="2"/>
+
+  <!-- 10. Output -->
+  <rect x="110" y="708" width="300" height="52" rx="10" fill="url(#outGrad)" filter="url(#shadow)"/>
+  <text x="260" y="732" text-anchor="middle" fill="#fff" font-size="14" font-weight="600">Dense (9) — Softmax</text>
+  <text x="260" y="750" text-anchor="middle" fill="#d1fae5" font-size="11">Output → 1 of 9 Land Cover Classes</text>
+
+  <!-- ===== SIDE LABELS ===== -->
+  <!-- Feature Extraction bracket -->
+  <line x1="80" y1="156" x2="80" y2="414" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="80" y1="156" x2="90" y2="156" stroke="#60a5fa" stroke-width="1.5"/>
+  <line x1="80" y1="414" x2="90" y2="414" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="72" y="290" text-anchor="middle" fill="#60a5fa" font-size="10" font-weight="600" transform="rotate(-90 72 290)">Feature Extraction</text>
+
+  <!-- Classification bracket -->
+  <line x1="440" y1="498" x2="440" y2="760" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="430" y1="498" x2="440" y2="498" stroke="#fbbf24" stroke-width="1.5"/>
+  <line x1="430" y1="760" x2="440" y2="760" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="452" y="634" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="600" transform="rotate(90 452 634)">Classification Head</text>
+
+  <!-- Legend -->
+  <rect x="50" y="790" width="420" height="110" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="260" y="814" text-anchor="middle" fill="#cbd5e1" font-size="12" font-weight="700">LEGEND</text>
+
+  <rect x="70" y="826" width="14" height="14" rx="3" fill="url(#convGrad)"/>
+  <text x="92" y="838" fill="#94a3b8" font-size="11">Conv1D Layer</text>
+
+  <rect x="200" y="826" width="14" height="14" rx="3" fill="url(#poolGrad)"/>
+  <text x="222" y="838" fill="#94a3b8" font-size="11">MaxPooling</text>
+
+  <rect x="330" y="826" width="14" height="14" rx="3" fill="url(#denseGrad)"/>
+  <text x="352" y="838" fill="#94a3b8" font-size="11">Dense (FC)</text>
+
+  <rect x="70" y="854" width="14" height="14" rx="3" fill="url(#dropGrad)"/>
+  <text x="92" y="866" fill="#94a3b8" font-size="11">Dropout</text>
+
+  <rect x="200" y="854" width="14" height="14" rx="3" fill="url(#outGrad)"/>
+  <text x="222" y="866" fill="#94a3b8" font-size="11">Output (Softmax)</text>
+
+  <text x="330" y="866" fill="#94a3b8" font-size="11" font-weight="600">Accuracy: 82.11%</text>
+
+  <!-- Arrows (simple triangles at line ends) -->
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#475569"/>
+    </marker>
+  </defs>
+</svg>

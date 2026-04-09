@@ -1,0 +1,54 @@
+{
+  "total_patches": 4,
+  "last_updated": "2026-03-27T16:25:57.397728",
+  "locations": [
+    {
+      "name": "Mumbai, India",
+      "lat": 19.076,
+      "lon": 72.877,
+      "collected_at": "2026-03-27T16:23:25.730907",
+      "building_pixels": 16497,
+      "total_pixels": 65536,
+      "density": "25.2%",
+      "raw_tile": "raw_tiles/Mumbai_India.tif",
+      "processed_X": "processed/Mumbai_India_X.npy",
+      "processed_y": "processed/Mumbai_India_y.npy"
+    },
+    {
+      "name": "Delhi, India",
+      "lat": 28.644,
+      "lon": 77.216,
+      "collected_at": "2026-03-27T16:25:13.526445",
+      "building_pixels": 19749,
+      "total_pixels": 65536,
+      "density": "30.1%",
+      "raw_tile": "raw_tiles/Delhi_India.tif",
+      "processed_X": "processed/Delhi_India_X.npy",
+      "processed_y": "processed/Delhi_India_y.npy"
+    },
+    {
+      "name": "Pune, India",
+      "lat": 18.52,
+      "lon": 73.856,
+      "collected_at": "2026-03-27T16:25:26.759139",
+      "building_pixels": 16859,
+      "total_pixels": 65536,
+      "density": "25.7%",
+      "raw_tile": "raw_tiles/Pune_India.tif",
+      "processed_X": "processed/Pune_India_X.npy",
+      "processed_y": "processed/Pune_India_y.npy"
+    },
+    {
+      "name": "Bangalore, India",
+      "lat": 12.972,
+      "lon": 77.595,
+      "collected_at": "2026-03-27T16:25:57.397227",
+      "building_pixels": 18919,
+      "total_pixels": 65536,
+      "density": "28.9%",
+      "raw_tile": "raw_tiles/Bangalore_India.tif",
+      "processed_X": "processed/Bangalore_India_X.npy",
+      "processed_y": "processed/Bangalore_India_y.npy"
+    }
+  ]
+}

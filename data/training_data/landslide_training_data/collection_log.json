@@ -1,0 +1,66 @@
+{
+  "total_patches": 5,
+  "last_updated": "2026-03-27T16:03:30.657564",
+  "locations": [
+    {
+      "name": "Kedarnath, Uttarakhand",
+      "lat": 30.735,
+      "lon": 79.067,
+      "collected_at": "2026-03-27T16:02:18.363527",
+      "risk_pixels": 8382,
+      "total_pixels": 16384,
+      "risk_ratio": "51.2%",
+      "raw_tile": "raw_tiles/Kedarnath_Uttarakhand.tif",
+      "processed_X": "processed/Kedarnath_Uttarakhand_X.npy",
+      "processed_y": "processed/Kedarnath_Uttarakhand_y.npy"
+    },
+    {
+      "name": "Munnar, Kerala",
+      "lat": 10.089,
+      "lon": 77.06,
+      "collected_at": "2026-03-27T16:02:35.795154",
+      "risk_pixels": 10101,
+      "total_pixels": 16384,
+      "risk_ratio": "61.7%",
+      "raw_tile": "raw_tiles/Munnar_Kerala.tif",
+      "processed_X": "processed/Munnar_Kerala_X.npy",
+      "processed_y": "processed/Munnar_Kerala_y.npy"
+    },
+    {
+      "name": "Darjeeling, West Bengal",
+      "lat": 27.036,
+      "lon": 88.262,
+      "collected_at": "2026-03-27T16:02:50.338313",
+      "risk_pixels": 8365,
+      "total_pixels": 16384,
+      "risk_ratio": "51.1%",
+      "raw_tile": "raw_tiles/Darjeeling_West_Bengal.tif",
+      "processed_X": "processed/Darjeeling_West_Bengal_X.npy",
+      "processed_y": "processed/Darjeeling_West_Bengal_y.npy"
+    },
+    {
+      "name": "Shimla, Himachal Pradesh",
+      "lat": 31.105,
+      "lon": 77.172,
+      "collected_at": "2026-03-27T16:03:20.398571",
+      "risk_pixels": 9108,
+      "total_pixels": 16384,
+      "risk_ratio": "55.6%",
+      "raw_tile": "raw_tiles/Shimla_Himachal_Pradesh.tif",
+      "processed_X": "processed/Shimla_Himachal_Pradesh_X.npy",
+      "processed_y": "processed/Shimla_Himachal_Pradesh_y.npy"
+    },
+    {
+      "name": "Gangtok, Sikkim",
+      "lat": 27.339,
+      "lon": 88.607,
+      "collected_at": "2026-03-27T16:03:30.656559",
+      "risk_pixels": 8805,
+      "total_pixels": 16384,
+      "risk_ratio": "53.7%",
+      "raw_tile": "raw_tiles/Gangtok_Sikkim.tif",
+      "processed_X": "processed/Gangtok_Sikkim_X.npy",
+      "processed_y": "processed/Gangtok_Sikkim_y.npy"
+    }
+  ]
+}

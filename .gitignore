@@ -1,0 +1,32 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+# Python virtual environments
+venv/
+.venv/
+
+# Python cache
+pycache/
+**/pycache/
+*.pyc
+*.pyo
+*.pyd
+
+# Model / runtime cache
+tile_cache/
+mine_detection_output/
+
+# Node modules (frontend)
+node_modules/
+
+# Next.js build files
+.next/
+out/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

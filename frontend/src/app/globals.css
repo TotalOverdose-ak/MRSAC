@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-space-bg: #030a16;
+  --color-space-stars: #ffffff;
+  --color-earth-blue: #00d4aa;
+  
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-serif: var(--font-playfair), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+@layer base {
+  body {
+    @apply bg-zinc-50 text-zinc-900 transition-colors duration-500;
+  }
+  
+  .dark body {
+    @apply bg-space-bg text-zinc-50;
+  }
+}

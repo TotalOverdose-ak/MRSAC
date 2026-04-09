@@ -1,0 +1,28 @@
+{
+  "dataset": "lulc_training_data",
+  "description": "Land Use Land Cover (LULC) 1D-CNN training dataset",
+  "total_samples": 11194,
+  "last_updated": "2026-03-27T15:59:00",
+  "data_sources": [
+    {"type": "manual_collection", "source": "Google Earth Engine Sentinel-2 + Dynamic World", "label": "auto_distill"},
+    {"type": "human_in_the_loop", "source": "User drawn polygons via TerrainGuardian UI", "label": "user_hitl"},
+    {"type": "auto_distill_ui", "source": "Dynamic World distillation via UI button", "label": "ui_auto_distill"}
+  ],
+  "files": {
+    "training_csv": "samples/lulc_samples.csv",
+    "model_weights": "model/lulc_custom_model.h5",
+    "class_encoder": "model/lulc_classes.npy"
+  },
+  "features": ["B2", "B3", "B4", "B8", "B11", "B12", "NDVI", "NDBI", "MNDWI", "NDSLI"],
+  "classes": {
+    "1": "Water",
+    "2": "Trees",
+    "3": "Grass",
+    "4": "Flooded Vegetation",
+    "5": "Crops",
+    "6": "Shrub & Scrub",
+    "7": "Built Area",
+    "8": "Bare Ground",
+    "9": "Snow & Ice"
+  }
+}

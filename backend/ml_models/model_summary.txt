@@ -1,0 +1,37 @@
+
+========== C:\Users\AkashK\Desktop\New folder (2)\Earth-Watch\new features\refrence\Deep-learning-for-satellite-imagery-main\Landslide mapping\LS_mapping.ipynb ==========
+
+========== C:\Users\AkashK\Desktop\New folder (2)\Earth-Watch\new features\refrence\landslide4sense-solution-main\Landslide4Sense solution.ipynb ==========
+-- MD --
+# Unet Model
+
+-- CODE --
+from utils import recall_m, precision_m, f1_m
+def unet_model(IMG_WIDTH, IMG_HIGHT, IMG_CHANNELS):
+    inputs = tf.keras.layers.Input((IMG_WIDTH, IMG_HIGHT, IMG_CHANNELS))
+
+    # Converted inputs to floating
+    #s = tf.keras.layers.Lambda(lambda x: x / 255)(inputs)
+
+
+    #Contraction path
+    c1 = tf.keras.layers.Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(inputs)
+    c1 = tf.keras.layers.Dropout(0.1)(c1)
+    c1 = tf.keras.layers.Conv2D(16, (3, 3), activ...
+
+-- CODE --
+model = unet_model(128, 128, 6)
+# model.summary()
+checkpointer = tf.keras.callbacks.ModelCheckpoint("best_model.h5", monitor="val_f1_m", verbose=1, save_best_only=True, mode="max")
+# earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_f1_m', patience=10, verbose=1, mode='max')
+
+callbacks = [
+    # earlyStopping,
+    checkpointer
+    ]
+history = model.fit(x_train, y_train, batch_size=16,  
+          epochs=100, 
+          verbose = 2,
+          validation_data=(x_valid, y_valid),
+      ...
+
