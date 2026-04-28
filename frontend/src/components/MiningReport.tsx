@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Printer, Pickaxe, ShieldAlert, ShieldCheck,
+  X, Pickaxe, ShieldAlert, ShieldCheck,
   BarChart3, MapPinned, BrainCircuit, Crosshair, Cpu, Eye,
   Download, FileText, Clock, Hash, Satellite, Database
 } from "lucide-react";
-import { toPng } from "html-to-image";
-import jsPDF from "jspdf";
+import { useReportPDF } from "./useReportPDF";
 
 // ── Types ────────────────────────────────────────────────────
 interface MiningReportProps {
@@ -160,52 +159,7 @@ function StatRow({ items }: { items: { label: string; value: string | number; co
 //  MAIN MINING REPORT COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function MiningReport({ isOpen, onClose, geoData, stats, patches }: MiningReportProps) {
-  const reportRef = useRef<HTMLDivElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
-
-  const reportId = useMemo(() => {
-    const ts = Date.now().toString(36).toUpperCase();
-    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `EW-MINE-${ts}-${rand}`;
-  }, []);
-  const reportTime = useMemo(() => new Date().toLocaleString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true
-  }), []);
-
-  const downloadPDF = async () => {
-    if (!reportRef.current) return;
-    setIsExporting(true);
-    try {
-      const el = reportRef.current;
-      // html-to-image uses browser's native SVG foreignObject rendering
-      // so it supports ALL modern CSS (lab, oklch, etc.) natively
-      const dataUrl = await toPng(el, {
-        pixelRatio: 2,
-        backgroundColor: "#030712",
-        quality: 1,
-        cacheBust: true,
-      });
-      // Create image to get dimensions
-      const img = new Image();
-      img.src = dataUrl;
-      await new Promise((resolve) => { img.onload = resolve; });
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const imgW = pageW - 16;
-      const imgH = (img.height * imgW) / img.width;
-      let remaining = imgH;
-      let pageNum = 0;
-      while (remaining > 0) {
-        if (pageNum > 0) pdf.addPage();
-        pdf.addImage(dataUrl, "PNG", 8, pageNum === 0 ? 8 : -(imgH - remaining), imgW, imgH);
-        remaining -= (pageH - 16);
-        pageNum++;
-      }
-      pdf.save(`${reportId}.pdf`);
-    } catch (e) { console.error("PDF export failed", e); alert("PDF export failed. Try again."); }
-    setIsExporting(false);
-  };
+  const { reportRef, reportId, reportTime, isExporting, downloadPDF } = useReportPDF("MINE");
 
   if (!isOpen || !geoData) return null;
 
