@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Printer, Pickaxe, ShieldAlert, ShieldCheck,
-  BarChart3, MapPinned, BrainCircuit, Crosshair, Cpu, Eye
+  BarChart3, MapPinned, BrainCircuit, Crosshair, Cpu, Eye,
+  Download, FileText, Clock, Hash, Satellite, Database
 } from "lucide-react";
+import { toPng } from "html-to-image";
+import jsPDF from "jspdf";
 
 // ── Types ────────────────────────────────────────────────────
 interface MiningReportProps {
@@ -157,6 +160,53 @@ function StatRow({ items }: { items: { label: string; value: string | number; co
 //  MAIN MINING REPORT COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function MiningReport({ isOpen, onClose, geoData, stats, patches }: MiningReportProps) {
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const reportId = useMemo(() => {
+    const ts = Date.now().toString(36).toUpperCase();
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `EW-MINE-${ts}-${rand}`;
+  }, []);
+  const reportTime = useMemo(() => new Date().toLocaleString("en-IN", {
+    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true
+  }), []);
+
+  const downloadPDF = async () => {
+    if (!reportRef.current) return;
+    setIsExporting(true);
+    try {
+      const el = reportRef.current;
+      // html-to-image uses browser's native SVG foreignObject rendering
+      // so it supports ALL modern CSS (lab, oklch, etc.) natively
+      const dataUrl = await toPng(el, {
+        pixelRatio: 2,
+        backgroundColor: "#030712",
+        quality: 1,
+        cacheBust: true,
+      });
+      // Create image to get dimensions
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((resolve) => { img.onload = resolve; });
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgW = pageW - 16;
+      const imgH = (img.height * imgW) / img.width;
+      let remaining = imgH;
+      let pageNum = 0;
+      while (remaining > 0) {
+        if (pageNum > 0) pdf.addPage();
+        pdf.addImage(dataUrl, "PNG", 8, pageNum === 0 ? 8 : -(imgH - remaining), imgW, imgH);
+        remaining -= (pageH - 16);
+        pageNum++;
+      }
+      pdf.save(`${reportId}.pdf`);
+    } catch (e) { console.error("PDF export failed", e); alert("PDF export failed. Try again."); }
+    setIsExporting(false);
+  };
+
   if (!isOpen || !geoData) return null;
 
   const features = geoData?.features || [];
@@ -189,9 +239,9 @@ export default function MiningReport({ isOpen, onClose, geoData, stats, patches 
                 <span className="font-serif text-base font-medium tracking-[0.15em] text-white uppercase">Mining Report</span>
               </div>
               <div className="flex items-center gap-2 print:hidden">
-                <button onClick={() => window.print()}
-                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 transition-colors border border-white/10 text-slate-400 hover:text-white"
-                  title="Print Report"><Printer className="w-4 h-4" /></button>
+                <button onClick={downloadPDF} disabled={isExporting}
+                  className="flex items-center justify-center gap-1.5 h-10 px-4 rounded-full bg-sky-500/10 hover:bg-sky-500/20 transition-colors border border-sky-500/20 text-sky-400 hover:text-sky-300 text-xs font-semibold disabled:opacity-50"
+                  title="Download PDF">{isExporting ? <span className="animate-spin">⏳</span> : <Download className="w-3.5 h-3.5" />} PDF</button>
                 <button onClick={onClose}
                   className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-red-500/20 transition-colors border border-white/10 text-slate-400 hover:text-red-400"
                   title="Close"><X className="w-4 h-4" /></button>
@@ -199,7 +249,33 @@ export default function MiningReport({ isOpen, onClose, geoData, stats, patches 
             </div>
 
             {/* ═══ BODY ═══ */}
-            <div className="relative z-10 p-5 flex flex-col gap-5">
+            <div ref={reportRef} className="relative z-10 p-5 flex flex-col gap-5">
+
+              {/* ── Report Tracking Info ──────────────────── */}
+              <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5"><Hash className="w-3 h-3 text-sky-400" /><span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Report ID</span></div>
+                  <span className="text-xs text-sky-300 font-mono font-bold">{reportId}</span>
+                </div>
+                <div className="flex flex-col gap-1 items-end">
+                  <div className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-sky-400" /><span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Generated</span></div>
+                  <span className="text-xs text-slate-300 font-mono">{reportTime}</span>
+                </div>
+              </div>
+
+              {/* ── Executive Summary ─────────────────────── */}
+              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
+                <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-2 flex items-center gap-1.5"><FileText className="w-3 h-3" /> Executive Summary</h3>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  This report presents the results of an automated mining detection scan performed on satellite imagery
+                  covering the selected Area of Interest. A total of <strong className="text-white">{stats?.total || 0} mine sites</strong> were
+                  detected, of which <strong className="text-rose-400">{stats?.illegal || 0}</strong> were classified as <strong className="text-rose-400">Illegal</strong>,{" "}
+                  <strong className="text-amber-400">{stats?.suspect || 0}</strong> as <strong className="text-amber-400">Suspect</strong>, and{" "}
+                  <strong className="text-sky-400">{stats?.legal || 0}</strong> as <strong className="text-sky-400">Legal/Verified</strong>.
+                  The total mining footprint covers approximately <strong className="text-white">{stats?.total_area_km2 || 0} km²</strong>.
+                  Classification is based on spatial overlap (IoU) with government-registered legal mine boundaries.
+                </p>
+              </div>
 
               {/* ── Section 1: Summary Stats Grid ─────────── */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -239,19 +315,21 @@ export default function MiningReport({ isOpen, onClose, geoData, stats, patches 
                 </div>
               </div>
 
-              {/* ── Section 3: Mine Details Table ─────────── */}
+              {/* ── Section 3: Mine Details Table (Enhanced) ─ */}
               {features.length > 0 && (
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                   <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-3">Detected Mines — Details</h3>
-                  <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                    <table className="w-full text-[11px]">
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-[10px]">
                       <thead>
                         <tr className="border-b border-white/10">
                           <th className="text-left py-2 text-slate-500 font-mono font-bold">ID</th>
                           <th className="text-left py-2 text-slate-500 font-mono font-bold">Area</th>
+                          <th className="text-left py-2 text-slate-500 font-mono font-bold">Location</th>
                           <th className="text-left py-2 text-slate-500 font-mono font-bold">Verdict</th>
                           <th className="text-left py-2 text-slate-500 font-mono font-bold">IoU</th>
                           <th className="text-left py-2 text-slate-500 font-mono font-bold">Conf</th>
+                          <th className="text-left py-2 text-slate-500 font-mono font-bold">Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -263,18 +341,27 @@ export default function MiningReport({ isOpen, onClose, geoData, stats, patches 
                           .map((feat: any) => {
                             const p = feat.properties || {};
                             const vc = VERDICT_COLORS[p.verdict] || VERDICT_COLORS.UNVERIFIED;
+                            const coords = feat.geometry?.coordinates?.[0] || [];
+                            const cLon = coords.length > 0 ? (coords.reduce((s: number, c: any) => s + c[0], 0) / coords.length).toFixed(4) : 'N/A';
+                            const cLat = coords.length > 0 ? (coords.reduce((s: number, c: any) => s + c[1], 0) / coords.length).toFixed(4) : 'N/A';
                             return (
                               <tr key={p.mine_id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                                 <td className="py-2 text-slate-300 font-mono">#{p.mine_id}</td>
                                 <td className="py-2 text-slate-300 font-mono">{(p.area_km2 || 0).toFixed(2)} km²</td>
+                                <td className="py-2 text-slate-400 font-mono text-[9px]">{cLat}°N, {cLon}°E</td>
                                 <td className="py-2">
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                                  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded"
                                     style={{ color: vc.color, backgroundColor: `${vc.color}15` }}>
                                     {vc.label.toUpperCase()}
                                   </span>
                                 </td>
                                 <td className="py-2 text-slate-300 font-mono">{(p.iou || 0).toFixed(3)}</td>
-                                <td className="py-2 text-slate-400 capitalize">{p.confidence || 'N/A'}</td>
+                                <td className="py-2 text-slate-400 capitalize text-[9px]">{p.confidence || 'N/A'}</td>
+                                <td className="py-2">
+                                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${p.verdict === 'USER_LEGAL' ? 'text-blue-400 bg-blue-400/10' : 'text-slate-500 bg-white/5'}`}>
+                                    {p.verdict === 'USER_LEGAL' ? '✓ VERIFIED' : 'PENDING'}
+                                  </span>
+                                </td>
                               </tr>
                             );
                           })}
@@ -352,7 +439,30 @@ export default function MiningReport({ isOpen, onClose, geoData, stats, patches 
                 </div>
               )}
 
-              {/* ── Section 7: Methodology ────────────────── */}
+              {/* ── Section 7: Data Sources ────────────────── */}
+              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-3 flex items-center gap-1.5">
+                  <Satellite className="w-3 h-3 text-sky-400" /> Data Sources
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { icon: <Satellite className="w-3 h-3 text-sky-400" />, label: "Imagery", value: "Sentinel-2 SR Harmonized" },
+                    { icon: <Cpu className="w-3 h-3 text-purple-400" />, label: "Resolution", value: "10m Multi-spectral" },
+                    { icon: <Database className="w-3 h-3 text-emerald-400" />, label: "Legal DB", value: "PostGIS · Mining Leases" },
+                    { icon: <BrainCircuit className="w-3 h-3 text-amber-400" />, label: "Model", value: "ResNet34·UNet+SCSE" },
+                  ].map(s => (
+                    <div key={s.label} className="flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-lg p-2.5">
+                      {s.icon}
+                      <div className="flex flex-col">
+                        <span className="text-[8px] text-slate-500 uppercase tracking-wider font-bold">{s.label}</span>
+                        <span className="text-[10px] text-slate-300 font-mono">{s.value}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Section 8: Methodology ────────────────── */}
               <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
                 <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-2 flex items-center gap-1.5">
                   <Cpu className="w-3 h-3" /> Model & Methodology
@@ -385,7 +495,7 @@ export default function MiningReport({ isOpen, onClose, geoData, stats, patches 
             {/* ═══ FOOTER ═══ */}
             <div className="relative z-10 px-5 py-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-[9px] text-slate-600 font-mono">
-                Earth Watch · MRSAC · Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                Earth Watch · MRSAC · {reportId} · {reportTime}
               </span>
               <span className="text-[9px] text-slate-600 font-mono">
                 Sentinel-2 · ResNet34·UNet · PostGIS
