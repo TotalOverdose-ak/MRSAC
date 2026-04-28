@@ -710,3 +710,173 @@ def get_snow_surface_temperature(geojson_geom, year=2024):
         'zone_lst': zone_lst,
     }
 
+
+def get_era5_snow(geojson_geom, year=2024):
+    """
+    Snow Depth + Snow Water Equivalent from ERA5-Land reanalysis.
+    Resolution: ~9km, Daily, 1950-present.
+    SWE = the key metric for water resource management.
+    """
+    print(f"[SNOW] → Computing ERA5-Land Snow Depth + SWE for {year}...")
+    init_gee()
+    region = ee.Geometry(geojson_geom)
+
+    era5 = (ee.ImageCollection('ECMWF/ERA5_LAND/DAILY_AGGR')
+            .filterBounds(region)
+            .filterDate(f'{year}-01-01', f'{year}-12-31'))
+
+    image_count = safe_get_info(era5.size(), 0)
+    print(f"[SNOW]   Found {image_count} ERA5-Land daily images")
+
+    if image_count == 0:
+        return {'swe_tiles': None, 'stats': {}}
+
+    # SWE (meters of water equivalent) — annual mean
+    swe_col = era5.select('snow_depth_water_equivalent')
+    swe_mean = swe_col.mean().clip(region)
+
+    swe_stats = swe_mean.reduceRegion(
+        reducer=ee.Reducer.mean().combine(ee.Reducer.max(), sharedInputs=True)
+            .combine(ee.Reducer.percentile([50, 90]), sharedInputs=True),
+        geometry=region, scale=9000, maxPixels=1e9
+    )
+
+    mean_swe = safe_get_info(swe_stats.get('snow_depth_water_equivalent_mean'), 0)
+    max_swe = safe_get_info(swe_stats.get('snow_depth_water_equivalent_max'), 0)
+    median_swe = safe_get_info(swe_stats.get('snow_depth_water_equivalent_p50'), 0)
+    p90_swe = safe_get_info(swe_stats.get('snow_depth_water_equivalent_p90'), 0)
+
+    # Convert to mm (1m = 1000mm)
+    mean_swe_mm = round((mean_swe or 0) * 1000, 1)
+    max_swe_mm = round((max_swe or 0) * 1000, 1)
+    median_swe_mm = round((median_swe or 0) * 1000, 1)
+    p90_swe_mm = round((p90_swe or 0) * 1000, 1)
+
+    print(f"[SNOW]   Mean SWE: {mean_swe_mm}mm, Max: {max_swe_mm}mm")
+
+    # Peak SWE month
+    monthly_swe = []
+    for m in range(1, 13):
+        end_d = 28 if m == 2 else (30 if m in (4, 6, 9, 11) else 31)
+        m_mean = safe_get_info(
+            era5.filterDate(f'{year}-{m:02d}-01', f'{year}-{m:02d}-{end_d}')
+            .select('snow_depth_water_equivalent').mean().reduceRegion(
+                reducer=ee.Reducer.mean(), geometry=region,
+                scale=9000, maxPixels=1e9
+            ).get('snow_depth_water_equivalent'), 0
+        )
+        monthly_swe.append({'month': m, 'swe_mm': round((m_mean or 0) * 1000, 1)})
+
+    peak_month = max(monthly_swe, key=lambda x: x['swe_mm'])
+
+    # SWE heatmap tile
+    swe_vis = swe_mean.multiply(1000).visualize(
+        min=0, max=max(max_swe_mm, 10),
+        palette=['#0f172a', '#1e3a5f', '#1d4ed8', '#3b82f6',
+                 '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe', '#ffffff'])
+    swe_tiles = get_map_tiles(swe_vis)
+
+    print(f"[SNOW] ✓ ERA5-Land SWE complete (peak month: {peak_month['month']})")
+    return {
+        'swe_tiles': swe_tiles,
+        'stats': {
+            'mean_swe_mm': mean_swe_mm,
+            'max_swe_mm': max_swe_mm,
+            'median_swe_mm': median_swe_mm,
+            'p90_swe_mm': p90_swe_mm,
+            'peak_month': peak_month['month'],
+            'peak_swe_mm': peak_month['swe_mm'],
+            'total_images': image_count,
+            'year': year,
+            'source': 'ERA5-Land (~9km daily)',
+        },
+        'monthly_swe': monthly_swe,
+    }
+
+
+def get_sentinel2_snow(geojson_geom, year=2024):
+    """
+    High-resolution (10m) snow mapping using Sentinel-2 NDSI.
+    B3 (Green, 10m) + B11 (SWIR, 20m) -> NDSI.
+    """
+    print(f"[SNOW] → Computing Sentinel-2 high-res snow (10m) for {year}...")
+    init_gee()
+    region = ee.Geometry(geojson_geom)
+
+    s2 = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+          .filterBounds(region)
+          .filterDate(f'{year}-01-01', f'{year}-12-31')
+          .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30)))
+
+    image_count = safe_get_info(s2.size(), 0)
+    print(f"[SNOW]   Found {image_count} Sentinel-2 images (<30% cloud)")
+
+    if image_count == 0:
+        return {'s2_snow_tiles': None, 'stats': {}}
+
+    # Cloud mask via SCL
+    def _mask_s2(img):
+        scl = img.select('SCL')
+        mask = scl.neq(3).And(scl.neq(8)).And(scl.neq(9)).And(scl.neq(10))
+        return img.updateMask(mask)
+
+    composite = s2.map(_mask_s2).median().clip(region)
+
+    # NDSI = (B3 - B11) / (B3 + B11)
+    ndsi = composite.normalizedDifference(['B3', 'B11']).rename('NDSI_S2')
+    snow_mask = ndsi.gt(NDSI_THRESHOLD).rename('snow_s2')
+
+    pixel_area = ee.Image.pixelArea().divide(1e6)
+    snow_area = safe_get_info(
+        snow_mask.multiply(pixel_area).reduceRegion(
+            reducer=ee.Reducer.sum(), geometry=region,
+            scale=20, maxPixels=1e10
+        ).get('snow_s2'), 0
+    )
+    total_area = safe_get_info(
+        ee.Image(1).multiply(pixel_area).reduceRegion(
+            reducer=ee.Reducer.sum(), geometry=region,
+            scale=20, maxPixels=1e10
+        ).get('constant'), 0
+    )
+    coverage_pct = round((snow_area / max(total_area, 0.001)) * 100, 1)
+
+    ndsi_stats = ndsi.reduceRegion(
+        reducer=ee.Reducer.mean().combine(ee.Reducer.stdDev(), sharedInputs=True),
+        geometry=region, scale=20, maxPixels=1e10
+    )
+    ndsi_mean = safe_get_info(ndsi_stats.get('NDSI_S2_mean'), 0)
+    ndsi_std = safe_get_info(ndsi_stats.get('NDSI_S2_stdDev'), 0)
+
+    print(f"[SNOW]   S2 Snow: {snow_area:.2f} km2 ({coverage_pct}%)")
+
+    # Tiles
+    s2_rgb = composite.select(['B4', 'B3', 'B2']).visualize(min=0, max=3000)
+    s2_rgb_tiles = get_map_tiles(s2_rgb)
+
+    s2_snow_vis = snow_mask.selfMask().visualize(min=0, max=1, palette=['#22d3ee'])
+    s2_snow_tiles = get_map_tiles(s2_snow_vis)
+
+    s2_ndsi_vis = ndsi.visualize(
+        min=-0.5, max=1,
+        palette=['#8B4513', '#D2691E', '#808080', '#C0C0C0',
+                 '#E0E0E0', '#FFFFFF', '#87CEEB'])
+    s2_ndsi_tiles = get_map_tiles(s2_ndsi_vis)
+
+    print(f"[SNOW] ✓ Sentinel-2 10m snow complete")
+    return {
+        's2_snow_tiles': s2_snow_tiles,
+        's2_rgb_tiles': s2_rgb_tiles,
+        's2_ndsi_tiles': s2_ndsi_tiles,
+        'stats': {
+            'snow_area_km2': round(snow_area, 2),
+            'total_area_km2': round(total_area, 2),
+            'snow_coverage_pct': coverage_pct,
+            'ndsi_mean': round(ndsi_mean, 3) if ndsi_mean else 0,
+            'ndsi_std': round(ndsi_std, 3) if ndsi_std else 0,
+            'resolution_m': 10,
+            'total_images': image_count,
+            'year': year,
+            'source': 'Sentinel-2 SR Harmonized (10m)',
+        }
+    }

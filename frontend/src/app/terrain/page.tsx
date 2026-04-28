@@ -157,6 +157,8 @@ function TerrainGuardianInner() {
   const [snowIncludePersistence, setSnowIncludePersistence] = useState(false);
   const [snowInclude8day, setSnowInclude8day] = useState(false);
   const [snowIncludeLst, setSnowIncludeLst] = useState(false);
+  const [snowIncludeSwe, setSnowIncludeSwe] = useState(false);
+  const [snowIncludeS2, setSnowIncludeS2] = useState(false);
   const [snowResult, setSnowResult] = useState<any>(null);
   const [showSnowReport, setShowSnowReport] = useState(false);
   
@@ -452,6 +454,8 @@ function TerrainGuardianInner() {
         include_persistence: snowIncludePersistence,
         include_8day: snowInclude8day,
         include_lst: snowIncludeLst,
+        include_swe: snowIncludeSwe,
+        include_s2: snowIncludeS2,
         trend_start_year: 2014,
         trend_end_year: 2025,
       });
@@ -1396,6 +1400,26 @@ function TerrainGuardianInner() {
                       <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${snowInclude8day ? 'translate-x-5' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                    <div>
+                      <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Snow Water Equivalent (ERA5)</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">ERA5-Land reanalysis · ~9km · SWE mm</p>
+                    </div>
+                    <button onClick={() => setSnowIncludeSwe(!snowIncludeSwe)}
+                      className={`w-10 h-5 rounded-full transition-all duration-300 ${snowIncludeSwe ? 'bg-blue-500' : 'bg-white/10'}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${snowIncludeSwe ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                    <div>
+                      <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Sentinel-2 High-Res (10m)</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">3x sharper snow boundaries vs Landsat</p>
+                    </div>
+                    <button onClick={() => setSnowIncludeS2(!snowIncludeS2)}
+                      className={`w-10 h-5 rounded-full transition-all duration-300 ${snowIncludeS2 ? 'bg-emerald-500' : 'bg-white/10'}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${snowIncludeS2 ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
                 </div>
 
                 <button
@@ -1424,6 +1448,9 @@ function TerrainGuardianInner() {
                           snowResult.persistence?.snow_days_tiles && { id: snowResult.persistence.snow_days_tiles, name: "Snow Persistence (Days)", color: "border-purple-500", text: "text-purple-400" },
                           snowResult.lst?.lst_tiles && { id: snowResult.lst.lst_tiles, name: "Surface Temperature (°C)", color: "border-orange-500", text: "text-orange-400" },
                           snowResult.snow_8day?.snow_8day_tiles && { id: snowResult.snow_8day.snow_8day_tiles, name: "8-Day Max Extent (MOD10A2)", color: "border-sky-500", text: "text-sky-400" },
+                          snowResult.era5_swe?.swe_tiles && { id: snowResult.era5_swe.swe_tiles, name: "Snow Water Equivalent (ERA5)", color: "border-blue-500", text: "text-blue-400" },
+                          snowResult.sentinel2?.s2_snow_tiles && { id: snowResult.sentinel2.s2_snow_tiles, name: "Sentinel-2 Snow (10m)", color: "border-emerald-500", text: "text-emerald-400" },
+                          snowResult.sentinel2?.s2_rgb_tiles && { id: snowResult.sentinel2.s2_rgb_tiles, name: "Sentinel-2 RGB (10m)", color: "border-green-500", text: "text-green-400" },
                         ].filter(Boolean).map((layer: any, i) => (
                           <button key={i} onClick={() => switchLayer(layer.id, layer.name)}
                             className={`flex items-center gap-3 p-3 rounded-lg border text-xs transition-all ${
@@ -1631,6 +1658,70 @@ function TerrainGuardianInner() {
                         <div className="flex justify-between text-[10px] px-1 text-slate-500">
                           <span>Source: MODIS MOD10A2 (500m, 8-day)</span>
                           <span className="font-mono">{snowResult.snow_8day.stats.composites} composites</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ERA5 Snow Water Equivalent */}
+                    {snowResult.era5_swe?.stats?.mean_swe_mm > 0 && (
+                      <div className="bg-white/[0.02] border border-blue-500/10 rounded-xl p-5 mt-2">
+                        <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-3 uppercase">Snow Water Equivalent — ERA5-Land ({snowResult.era5_swe.stats.year})</h3>
+                        <div className="grid grid-cols-4 gap-2 mb-3">
+                          {[
+                            { label: 'Mean SWE', value: `${snowResult.era5_swe.stats.mean_swe_mm}`, unit: 'mm', color: 'text-blue-400' },
+                            { label: 'Max SWE', value: `${snowResult.era5_swe.stats.max_swe_mm}`, unit: 'mm', color: 'text-blue-300' },
+                            { label: 'Peak Month', value: `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][snowResult.era5_swe.stats.peak_month - 1]}`, unit: '', color: 'text-cyan-400' },
+                            { label: 'Peak SWE', value: `${snowResult.era5_swe.stats.peak_swe_mm}`, unit: 'mm', color: 'text-cyan-300' },
+                          ].map(s => (
+                            <div key={s.label} className="bg-black/20 border border-white/5 rounded-lg p-2.5 text-center">
+                              <div className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5">{s.label}</div>
+                              <div className={`text-sm font-bold font-mono ${s.color}`}>{s.value}<span className="text-[9px] text-slate-500 ml-0.5">{s.unit}</span></div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Monthly SWE mini bar chart */}
+                        {snowResult.era5_swe.monthly_swe && (
+                          <div className="flex items-end gap-0.5 h-12 mt-2">
+                            {snowResult.era5_swe.monthly_swe.map((m: any) => {
+                              const maxM = Math.max(...snowResult.era5_swe.monthly_swe.map((x: any) => x.swe_mm), 1);
+                              const h = (m.swe_mm / maxM) * 100;
+                              return (
+                                <div key={m.month} className="flex-1 flex flex-col items-center gap-0.5 group">
+                                  <div className="w-full bg-blue-500/30 rounded-t-sm group-hover:bg-blue-400 transition-colors" style={{ height: `${Math.max(2, h)}%` }} />
+                                  <span className="text-[7px] text-slate-500 font-mono">{['J','F','M','A','M','J','J','A','S','O','N','D'][m.month-1]}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="flex justify-between text-[10px] px-1 text-slate-500 mt-2">
+                          <span>Source: ERA5-Land (~9km daily)</span>
+                          <span className="font-mono">{snowResult.era5_swe.stats.total_images} images</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sentinel-2 High-Res Snow */}
+                    {snowResult.sentinel2?.stats?.total_images > 0 && (
+                      <div className="bg-white/[0.02] border border-emerald-500/10 rounded-xl p-5 mt-2">
+                        <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-3 uppercase">Sentinel-2 Snow (10m) — {snowResult.sentinel2.stats.year}</h3>
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-center">
+                            <div className="text-[9px] text-emerald-500/70 uppercase tracking-wider font-bold mb-1">Coverage</div>
+                            <div className="text-lg font-bold font-mono text-emerald-300">{snowResult.sentinel2.stats.snow_coverage_pct}<span className="text-xs text-emerald-500/50 ml-0.5">%</span></div>
+                          </div>
+                          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-3 text-center">
+                            <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">Snow Area</div>
+                            <div className="text-base font-mono text-slate-300">{snowResult.sentinel2.stats.snow_area_km2}<span className="text-xs text-slate-500 ml-0.5">km²</span></div>
+                          </div>
+                          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-3 text-center">
+                            <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">NDSI</div>
+                            <div className="text-base font-mono text-slate-300">{snowResult.sentinel2.stats.ndsi_mean}</div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-[10px] px-1 text-slate-500">
+                          <span>Source: Sentinel-2 SR (10m)</span>
+                          <span className="font-mono">{snowResult.sentinel2.stats.total_images} images</span>
                         </div>
                       </div>
                     )}
