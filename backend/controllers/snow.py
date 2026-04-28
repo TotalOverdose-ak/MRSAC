@@ -2,6 +2,7 @@
 backend/routers/snow.py
 ========================
 POST /api/snow — Snow & Ice cover mapping using Landsat 8/9 NDSI.
+Enhanced: Elevation zones, SLA, FSC, Seasonal metrics, Snow persistence.
 """
 
 import asyncio
@@ -11,7 +12,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.services.analysis.snow_cover import analyze_snow_cover, get_snow_trend
+from backend.services.analysis.snow_cover import (
+    analyze_snow_cover, get_snow_trend, get_seasonal_snow, get_snow_persistence
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -21,6 +24,8 @@ class SnowRequest(BaseModel):
     geojson: dict
     year: Optional[int] = 2024
     include_trend: Optional[bool] = True
+    include_seasonal: Optional[bool] = False
+    include_persistence: Optional[bool] = False
     trend_start_year: Optional[int] = 2014
     trend_end_year: Optional[int] = 2025
 
@@ -29,30 +34,48 @@ class SnowRequest(BaseModel):
 async def run_snow(req: SnowRequest):
     """
     Snow cover analysis for the given AOI polygon.
-    Uses Landsat 8/9 NDSI thresholding via GEE.
+    Enhanced with elevation analysis, seasonal metrics, and MODIS persistence.
     """
     try:
-        logger.info(f"Snow analysis requested — year={req.year}, include_trend={req.include_trend}")
+        logger.info(
+            f"Snow analysis requested — year={req.year}, "
+            f"trend={req.include_trend}, seasonal={req.include_seasonal}, "
+            f"persistence={req.include_persistence}"
+        )
 
         loop = asyncio.get_event_loop()
         
-        # We can run analyze_snow_cover and get_snow_trend concurrently
+        # Build concurrent tasks
+        task_keys = ['main']
         tasks = [
             loop.run_in_executor(None, lambda: analyze_snow_cover(req.geojson, req.year))
         ]
         
         if req.include_trend:
+            task_keys.append('trend')
             tasks.append(
                 loop.run_in_executor(None, lambda: get_snow_trend(
                     req.geojson, req.trend_start_year, req.trend_end_year
                 ))
             )
+
+        if req.include_seasonal:
+            task_keys.append('seasonal')
+            tasks.append(
+                loop.run_in_executor(None, lambda: get_seasonal_snow(req.geojson, req.year))
+            )
+
+        if req.include_persistence:
+            task_keys.append('persistence')
+            tasks.append(
+                loop.run_in_executor(None, lambda: get_snow_persistence(req.geojson, req.year))
+            )
             
         results = await asyncio.gather(*tasks)
         
         response = {"status": "success", **results[0]}
-        if req.include_trend and len(results) > 1:
-            response["trend"] = results[1]
+        for i, key in enumerate(task_keys[1:], 1):
+            response[key] = results[i]
             
         return response
 

@@ -19,6 +19,7 @@ import FireReport from "@/components/FireReport";
 import DeforestationReport from "@/components/DeforestationReport";
 import BuildingReport from "@/components/BuildingReport";
 import LandslideReport from "@/components/LandslideReport";
+import SnowReport from "@/components/SnowReport";
 import CustomSelect from "@/components/CustomSelect";
 
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
@@ -152,7 +153,10 @@ function TerrainGuardianInner() {
   // Snow State
   const [snowYear, setSnowYear] = useState(2024);
   const [snowIncludeTrend, setSnowIncludeTrend] = useState(true);
+  const [snowIncludeSeasonal, setSnowIncludeSeasonal] = useState(false);
+  const [snowIncludePersistence, setSnowIncludePersistence] = useState(false);
   const [snowResult, setSnowResult] = useState<any>(null);
+  const [showSnowReport, setShowSnowReport] = useState(false);
   
   // Landslide State
   const [landslideEngine, setLandslideEngine] = useState("gee");
@@ -442,6 +446,8 @@ function TerrainGuardianInner() {
         geojson: geom,
         year: snowYear,
         include_trend: snowIncludeTrend,
+        include_seasonal: snowIncludeSeasonal,
+        include_persistence: snowIncludePersistence,
         trend_start_year: 2014,
         trend_end_year: 2025,
       });
@@ -1344,6 +1350,30 @@ function TerrainGuardianInner() {
                   </div>
                 </div>
 
+                {/* Advanced toggles */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                    <div>
+                      <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Seasonal Breakdown</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">Winter / Spring / Summer / Autumn</p>
+                    </div>
+                    <button onClick={() => setSnowIncludeSeasonal(!snowIncludeSeasonal)}
+                      className={`w-10 h-5 rounded-full transition-all duration-300 ${snowIncludeSeasonal ? 'bg-cyan-500' : 'bg-white/10'}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${snowIncludeSeasonal ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                    <div>
+                      <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Snow Persistence (MODIS)</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">Days/year with snow cover (500m daily)</p>
+                    </div>
+                    <button onClick={() => setSnowIncludePersistence(!snowIncludePersistence)}
+                      className={`w-10 h-5 rounded-full transition-all duration-300 ${snowIncludePersistence ? 'bg-purple-500' : 'bg-white/10'}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${snowIncludePersistence ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   onClick={runSnow}
                   disabled={!selectedPolygon || loading}
@@ -1364,9 +1394,11 @@ function TerrainGuardianInner() {
                       <div className="flex flex-col gap-2">
                         {[
                           { id: snowResult.snow_tiles, name: "Snow Cover Extent", color: "border-cyan-500", text: "text-cyan-400" },
+                          { id: snowResult.fsc_tiles, name: "Fractional Snow Cover", color: "border-sky-500", text: "text-sky-400" },
                           { id: snowResult.ndsi_tiles, name: "NDSI Heatmap", color: "border-indigo-500", text: "text-indigo-400" },
                           { id: snowResult.rgb_tiles, name: "True Color (Landsat)", color: "border-slate-500", text: "text-slate-400" },
-                        ].map((layer, i) => (
+                          snowResult.persistence?.snow_days_tiles && { id: snowResult.persistence.snow_days_tiles, name: "Snow Persistence (Days)", color: "border-purple-500", text: "text-purple-400" },
+                        ].filter(Boolean).map((layer: any, i) => (
                           <button key={i} onClick={() => switchLayer(layer.id, layer.name)}
                             className={`flex items-center gap-3 p-3 rounded-lg border text-xs transition-all ${
                               overlayTiles === layer.id
@@ -1394,11 +1426,67 @@ function TerrainGuardianInner() {
                            <div className="text-lg font-mono text-slate-300">{snowResult.stats?.snow_area_km2} <span className="text-xs text-slate-500">km²</span></div>
                          </div>
                       </div>
-                      <div className="flex justify-between items-center text-[11px] px-2">
-                         <span className="text-slate-500">Mean NDSI:</span>
-                         <span className="font-mono text-slate-300">{snowResult.stats?.ndsi_mean} ± {snowResult.stats?.ndsi_std}</span>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-[11px] px-2">
+                           <span className="text-slate-500">Mean NDSI:</span>
+                           <span className="font-mono text-slate-300">{snowResult.stats?.ndsi_mean} ± {snowResult.stats?.ndsi_std}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] px-2">
+                           <span className="text-slate-500">Fractional Snow Cover:</span>
+                           <span className="font-mono text-sky-400">{snowResult.stats?.mean_fractional_snow_cover_pct}%</span>
+                        </div>
                       </div>
                     </div>
+
+                    {/* Snow Line Altitude */}
+                    {snowResult.snow_line?.snow_line_altitude_m && (
+                      <div className="bg-white/[0.02] border border-cyan-500/10 rounded-xl p-5 mt-2">
+                        <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-3 uppercase flex items-center gap-2">
+                          <Mountain className="w-3.5 h-3.5 text-cyan-400" /> Snow Line Altitude
+                        </h3>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-3 text-center">
+                            <div className="text-[9px] text-cyan-500/70 uppercase tracking-wider font-bold mb-1">SLA</div>
+                            <div className="text-lg font-bold font-mono text-cyan-300">{snowResult.snow_line.snow_line_altitude_m}<span className="text-xs text-cyan-500/50 ml-0.5">m</span></div>
+                          </div>
+                          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-3 text-center">
+                            <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">Median</div>
+                            <div className="text-base font-mono text-slate-300">{snowResult.snow_line.median_snow_elevation_m || '—'}<span className="text-xs text-slate-500 ml-0.5">m</span></div>
+                          </div>
+                          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-3 text-center">
+                            <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">Peak</div>
+                            <div className="text-base font-mono text-slate-300">{snowResult.snow_line.highest_snow_m || '—'}<span className="text-xs text-slate-500 ml-0.5">m</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Elevation Zone Breakdown */}
+                    {snowResult.elevation_zones?.length > 0 && (
+                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 mt-2">
+                        <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-3 uppercase">Snow by Elevation Zone</h3>
+                        <div className="space-y-2">
+                          {snowResult.elevation_zones.map((zone: any) => {
+                            const maxPct = Math.max(...snowResult.elevation_zones.map((z: any) => z.snow_coverage_pct), 1);
+                            const barWidth = (zone.snow_coverage_pct / maxPct) * 100;
+                            return (
+                              <div key={zone.label} className="group">
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: zone.color }} />
+                                    {zone.label}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-cyan-400">{zone.snow_coverage_pct}%</span>
+                                </div>
+                                <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${barWidth}%`, backgroundColor: zone.color }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Trend Chart */}
                     {snowResult.trend && snowResult.trend.length > 0 && (
@@ -1419,6 +1507,57 @@ function TerrainGuardianInner() {
                         </div>
                       </div>
                     )}
+
+                    {/* Seasonal Breakdown */}
+                    {snowResult.seasonal && snowResult.seasonal.length > 0 && (
+                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 mt-2">
+                        <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-3 uppercase">Seasonal Snow Coverage ({snowResult.stats?.year})</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                          {snowResult.seasonal.map((s: any) => {
+                            const colors: any = { winter: '#38bdf8', spring: '#4ade80', summer: '#fbbf24', autumn: '#f97316' };
+                            return (
+                              <div key={s.season} className="bg-black/20 border border-white/5 rounded-lg p-3">
+                                <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-1">{s.label}</div>
+                                <div className="text-base font-bold font-mono" style={{ color: colors[s.season] || '#38bdf8' }}>{s.snow_coverage_pct}%</div>
+                                <div className="text-[9px] text-slate-500 font-mono">{s.snow_area_km2} km²</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Snow Persistence (MODIS) */}
+                    {snowResult.persistence?.stats?.mean_snow_days > 0 && (
+                      <div className="bg-white/[0.02] border border-purple-500/10 rounded-xl p-5 mt-2">
+                        <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-3 uppercase">Snow Persistence — MODIS Daily ({snowResult.persistence.stats.year})</h3>
+                        <div className="grid grid-cols-4 gap-2 mb-3">
+                          {[
+                            { label: 'Mean Days', value: snowResult.persistence.stats.mean_snow_days, color: 'text-purple-400' },
+                            { label: 'Median', value: snowResult.persistence.stats.median_snow_days, color: 'text-purple-300' },
+                            { label: 'P90 Days', value: snowResult.persistence.stats.p90_snow_days, color: 'text-fuchsia-400' },
+                            { label: 'Max Days', value: snowResult.persistence.stats.max_snow_days, color: 'text-pink-400' },
+                          ].map(s => (
+                            <div key={s.label} className="bg-black/20 border border-white/5 rounded-lg p-2.5 text-center">
+                              <div className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-0.5">{s.label}</div>
+                              <div className={`text-sm font-bold font-mono ${s.color}`}>{s.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between text-[10px] px-1 text-slate-500">
+                          <span>Source: MODIS MOD10A1 (500m daily)</span>
+                          <span className="font-mono">{snowResult.persistence.stats.total_images} images</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Generate Report Button */}
+                    <button
+                      onClick={() => setShowSnowReport(true)}
+                      className="w-full py-3.5 rounded-xl text-sm font-semibold tracking-wide bg-gradient-to-r from-cyan-500/20 to-blue-500/20 backdrop-blur-sm border border-cyan-500/20 text-cyan-300 shadow-[0_0_30px_rgba(34,211,238,0.1)] hover:from-cyan-500/30 hover:to-blue-500/30 hover:text-white hover:shadow-[0_0_40px_rgba(34,211,238,0.2)] transition-all flex items-center justify-center gap-2 mt-2"
+                    >
+                      <BarChart3 className="w-4 h-4" /> Generate Snow Report
+                    </button>
 
                   </motion.div>
                 )}
@@ -2146,6 +2285,13 @@ function TerrainGuardianInner() {
         onClose={() => setShowLandslideReport(false)}
         landslideResult={landslideResult}
         engine={landslideEngine}
+      />
+
+      {/* Snow Report Modal */}
+      <SnowReport
+        isOpen={showSnowReport}
+        onClose={() => setShowSnowReport(false)}
+        snowResult={snowResult}
       />
     </div>
   );
