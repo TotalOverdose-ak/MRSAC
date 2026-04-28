@@ -169,7 +169,7 @@ export default function MiningReport({ isOpen, onClose, geoData, stats, patches 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0 pointer-events-auto"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div

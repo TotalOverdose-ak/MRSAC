@@ -183,18 +183,54 @@ function TerrainGuardianInner() {
     try {
       if (geoJsonText && drawInstance) {
         const parsed = JSON.parse(geoJsonText);
-        if (parsed.type === "Polygon" || parsed.type === "MultiPolygon") {
-          const feat = { type: "Feature" as const, properties: {}, geometry: parsed };
-          setSelectedPolygon(feat);
+
+        // Normalize any input format into an array of GeoJSON Feature objects
+        let features: any[] = [];
+
+        if (Array.isArray(parsed)) {
+          // Array of objects: [{name, type, coordinates}, ...] or [{type:"Feature", geometry:{...}}, ...]
+          features = parsed.map((item: any) => {
+            if (item.type === "Feature" && item.geometry) return item;
+            if (item.coordinates) {
+              return { type: "Feature" as const, properties: { name: item.name || "" }, geometry: { type: item.type || "Polygon", coordinates: item.coordinates } };
+            }
+            return null;
+          }).filter(Boolean);
+        } else if (parsed.type === "FeatureCollection" && Array.isArray(parsed.features)) {
+          features = parsed.features;
+        } else if (parsed.type === "Feature" && parsed.geometry) {
+          features = [parsed];
+        } else if (parsed.type === "Polygon" || parsed.type === "MultiPolygon") {
+          features = [{ type: "Feature" as const, properties: {}, geometry: parsed }];
+        }
+
+        if (features.length > 0) {
+          // Use only the first polygon for analysis
+          setSelectedPolygon(features[0]);
+
+          // Draw all polygons on the map
           drawInstance.deleteAll();
-          drawInstance.add(feat);
+          features.forEach((f: any) => drawInstance.add(f));
+
+          // Compute bounding box across ALL features for auto-zoom
           if (mapRef.current) {
-            const coords = parsed.type === 'Polygon' ? parsed.coordinates[0][0] : parsed.coordinates[0][0][0];
-            mapRef.current.flyTo({ center: [coords[0], coords[1]], zoom: 10, duration: 1500 });
+            let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+            features.forEach((f: any) => {
+              const geom = f.geometry;
+              const rings = geom.type === "Polygon" ? geom.coordinates : geom.coordinates.flat();
+              rings.forEach((ring: any) => {
+                (Array.isArray(ring[0]) ? ring : [ring]).forEach((pt: any) => {
+                  if (typeof pt[0] === "number") { minLon = Math.min(minLon, pt[0]); maxLon = Math.max(maxLon, pt[0]); minLat = Math.min(minLat, pt[1]); maxLat = Math.max(maxLat, pt[1]); }
+                });
+              });
+            });
+            if (minLon <= maxLon && minLat <= maxLat) {
+              mapRef.current.fitBounds([[minLon, minLat], [maxLon, maxLat]], { padding: 80, duration: 1500, maxZoom: 14 });
+            }
           }
         }
       }
-    } catch { /* ignore parse error while typing */ }
+    } catch { /* ignore parse errors while user is typing */ }
   }, [geoJsonText, drawInstance]);
 
   const handleModeChange = (mode: string) => {
