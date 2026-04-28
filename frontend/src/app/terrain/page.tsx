@@ -155,6 +155,7 @@ function TerrainGuardianInner() {
   const [snowIncludeTrend, setSnowIncludeTrend] = useState(true);
   const [snowIncludeSeasonal, setSnowIncludeSeasonal] = useState(false);
   const [snowIncludePersistence, setSnowIncludePersistence] = useState(false);
+  const [snowInclude8day, setSnowInclude8day] = useState(false);
   const [snowIncludeLst, setSnowIncludeLst] = useState(false);
   const [snowResult, setSnowResult] = useState<any>(null);
   const [showSnowReport, setShowSnowReport] = useState(false);
@@ -449,6 +450,7 @@ function TerrainGuardianInner() {
         include_trend: snowIncludeTrend,
         include_seasonal: snowIncludeSeasonal,
         include_persistence: snowIncludePersistence,
+        include_8day: snowInclude8day,
         include_lst: snowIncludeLst,
         trend_start_year: 2014,
         trend_end_year: 2025,
@@ -1384,6 +1386,16 @@ function TerrainGuardianInner() {
                       <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${snowIncludeLst ? 'translate-x-5' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                    <div>
+                      <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">8-Day Max Extent (MOD10A2)</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">Maximum snow over 8-day windows</p>
+                    </div>
+                    <button onClick={() => setSnowInclude8day(!snowInclude8day)}
+                      className={`w-10 h-5 rounded-full transition-all duration-300 ${snowInclude8day ? 'bg-sky-500' : 'bg-white/10'}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${snowInclude8day ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
                 </div>
 
                 <button
@@ -1411,6 +1423,7 @@ function TerrainGuardianInner() {
                           { id: snowResult.rgb_tiles, name: "True Color (Landsat)", color: "border-slate-500", text: "text-slate-400" },
                           snowResult.persistence?.snow_days_tiles && { id: snowResult.persistence.snow_days_tiles, name: "Snow Persistence (Days)", color: "border-purple-500", text: "text-purple-400" },
                           snowResult.lst?.lst_tiles && { id: snowResult.lst.lst_tiles, name: "Surface Temperature (°C)", color: "border-orange-500", text: "text-orange-400" },
+                          snowResult.snow_8day?.snow_8day_tiles && { id: snowResult.snow_8day.snow_8day_tiles, name: "8-Day Max Extent (MOD10A2)", color: "border-sky-500", text: "text-sky-400" },
                         ].filter(Boolean).map((layer: any, i) => (
                           <button key={i} onClick={() => switchLayer(layer.id, layer.name)}
                             className={`flex items-center gap-3 p-3 rounded-lg border text-xs transition-all ${
@@ -1593,6 +1606,31 @@ function TerrainGuardianInner() {
                             <span className="text-slate-500">Snow vs AOI Δ:</span>
                             <span className="font-mono text-cyan-400">{(snowResult.lst.stats.snow_mean_lst_c - snowResult.lst.stats.aoi_mean_lst_c).toFixed(1)}°C</span>
                           </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 8-Day Max Snow Extent (MOD10A2) */}
+                    {snowResult.snow_8day?.stats?.composites > 0 && (
+                      <div className="bg-white/[0.02] border border-sky-500/10 rounded-xl p-5 mt-2">
+                        <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-3 uppercase">8-Day Max Snow Extent — MOD10A2 ({snowResult.snow_8day.stats.year})</h3>
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          <div className="bg-sky-500/10 border border-sky-500/20 rounded-lg p-3 text-center">
+                            <div className="text-[9px] text-sky-500/70 uppercase tracking-wider font-bold mb-1">Max Extent</div>
+                            <div className="text-lg font-bold font-mono text-sky-300">{snowResult.snow_8day.stats.max_extent_pct}<span className="text-xs text-sky-500/50 ml-0.5">%</span></div>
+                          </div>
+                          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-3 text-center">
+                            <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">Area</div>
+                            <div className="text-base font-mono text-slate-300">{snowResult.snow_8day.stats.max_extent_area_km2}<span className="text-xs text-slate-500 ml-0.5">km²</span></div>
+                          </div>
+                          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-3 text-center">
+                            <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">Frequency</div>
+                            <div className="text-base font-mono text-slate-300">{(snowResult.snow_8day.stats.mean_snow_frequency * 100).toFixed(1)}<span className="text-xs text-slate-500 ml-0.5">%</span></div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-[10px] px-1 text-slate-500">
+                          <span>Source: MODIS MOD10A2 (500m, 8-day)</span>
+                          <span className="font-mono">{snowResult.snow_8day.stats.composites} composites</span>
                         </div>
                       </div>
                     )}

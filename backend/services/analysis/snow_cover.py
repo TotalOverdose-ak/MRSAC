@@ -525,6 +525,89 @@ def get_snow_persistence(geojson_geom, year=2024):
     }
 
 
+def get_8day_snow_extent(geojson_geom, year=2024):
+    """
+    Compute 8-day maximum snow extent using MODIS MOD10A2.
+    MOD10A2 captures the maximum snow cover over each 8-day window,
+    useful for catching short snow events that daily products may miss.
+    Band: Maximum_Snow_Extent (0-100 NDSI, 200=missing, 201=no decision, 237=water, 250=cloud, 254=saturated, 255=fill)
+    """
+    print(f"[SNOW] → Computing 8-day max snow extent (MOD10A2) for {year}...")
+    init_gee()
+    region = ee.Geometry(geojson_geom)
+
+    modis_8d = (ee.ImageCollection('MODIS/061/MOD10A2')
+                .filterBounds(region)
+                .filterDate(f'{year}-01-01', f'{year}-12-31')
+                .select('Maximum_Snow_Extent'))
+
+    image_count = safe_get_info(modis_8d.size(), 0)
+    print(f"[SNOW]   Found {image_count} MOD10A2 8-day composites")
+
+    if image_count == 0:
+        return {'snow_8day_tiles': None, 'stats': {'composites': 0}}
+
+    # Binary snow: Maximum_Snow_Extent values 0-100 are valid NDSI, > 100 are flags
+    def _to_snow(img):
+        valid = img.lte(100)
+        snow = img.updateMask(valid).gt(10).rename('snow8d')
+        return snow.copyProperties(img, ['system:time_start'])
+
+    snow_freq = modis_8d.map(_to_snow)
+
+    # Mean across all 8-day windows = fraction of year with snow
+    snow_frac = snow_freq.mean().clip(region).rename('snow_frequency')
+    pixel_area = ee.Image.pixelArea().divide(1e6)
+
+    # Max extent composite — any pixel that was EVER snow in the year
+    max_extent = snow_freq.max().clip(region).rename('max_snow')
+    max_extent_area = safe_get_info(
+        max_extent.multiply(pixel_area).reduceRegion(
+            reducer=ee.Reducer.sum(), geometry=region,
+            scale=500, maxPixels=1e9
+        ).get('max_snow'), 0
+    )
+
+    total_area = safe_get_info(
+        ee.Image(1).multiply(pixel_area).reduceRegion(
+            reducer=ee.Reducer.sum(), geometry=region,
+            scale=500, maxPixels=1e9
+        ).get('constant'), 0
+    )
+
+    # Mean annual snow frequency stats
+    freq_stats = snow_frac.reduceRegion(
+        reducer=ee.Reducer.mean().combine(ee.Reducer.max(), sharedInputs=True),
+        geometry=region, scale=500, maxPixels=1e9
+    )
+    mean_freq = safe_get_info(freq_stats.get('snow_frequency_mean'), 0)
+    max_freq = safe_get_info(freq_stats.get('snow_frequency_max'), 0)
+
+    max_pct = round((max_extent_area / max(total_area, 0.001)) * 100, 1)
+    print(f"[SNOW]   Max annual extent: {max_extent_area:.2f} km² ({max_pct}%)")
+
+    # Tile: snow frequency heatmap (0=never snow, 1=always snow)
+    freq_vis = snow_frac.visualize(
+        min=0, max=1,
+        palette=['#0f172a', '#1e3a5f', '#1e40af', '#3b82f6',
+                 '#22d3ee', '#a5f3fc', '#e0f2fe', '#ffffff'])
+    snow_8day_tiles = get_map_tiles(freq_vis)
+
+    print(f"[SNOW] ✓ 8-day max snow extent computed")
+    return {
+        'snow_8day_tiles': snow_8day_tiles,
+        'stats': {
+            'max_extent_area_km2': round(max_extent_area, 2),
+            'max_extent_pct': max_pct,
+            'mean_snow_frequency': round(mean_freq, 3),
+            'max_snow_frequency': round(max_freq, 3),
+            'composites': image_count,
+            'year': year,
+            'source': 'MOD10A2 (8-Day Max Snow Extent)',
+        }
+    }
+
+
 def get_snow_surface_temperature(geojson_geom, year=2024):
     """
     Compute Land/Ice Surface Temperature over snow-covered areas
