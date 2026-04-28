@@ -17,6 +17,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import LulcReport from "@/components/LulcReport";
 import FireReport from "@/components/FireReport";
 import DeforestationReport from "@/components/DeforestationReport";
+import BuildingReport from "@/components/BuildingReport";
+import LandslideReport from "@/components/LandslideReport";
 import CustomSelect from "@/components/CustomSelect";
 
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
@@ -163,6 +165,8 @@ function TerrainGuardianInner() {
   const [buildingResult, setBuildingResult] = useState<any>(null);
   const [buildingTrainClass, setBuildingTrainClass] = useState("1");
   const [isBuildingTraining, setIsBuildingTraining] = useState(false);
+  const [showBuildingReport, setShowBuildingReport] = useState(false);
+  const [showLandslideReport, setShowLandslideReport] = useState(false);
 
   // ── Draw handlers ──────────────────────────────────────────
   const onUpdateDraw = useCallback((e: any) => {
@@ -642,13 +646,63 @@ function TerrainGuardianInner() {
           type: "fill-extrusion",
           source: "gee-buildings-3d",
           paint: {
-            "fill-extrusion-color": "#f97316", // Beautiful vibrant orange for 3D buildings
-            "fill-extrusion-height": ["+", 8, ["*", ["get", "confidence"], 12]], // Taller buildings if higher confidence
+            "fill-extrusion-color": [
+              "interpolate", ["linear"], ["get", "confidence"],
+              0.5, "#5b21b6",   // Low confidence → deep purple
+              0.65, "#7c3aed",  // Medium-low → vibrant purple
+              0.75, "#a78bfa",  // Medium → lavender
+              0.85, "#06b6d4",  // Medium-high → cyan
+              0.95, "#22d3ee",  // High → bright cyan
+            ],
+            "fill-extrusion-height": ["+", 6, ["*", ["get", "confidence"], 18]],
             "fill-extrusion-base": 0,
-            "fill-extrusion-opacity": 0.85
+            "fill-extrusion-opacity": 0.9
           }
         }
       ]
+    };
+  } else if (overlayTiles === "fire_risk_grid" && fireRiskResult?.features) {
+    // ML Fire Risk Prediction — GeoJSON grid cells colored by risk_score
+    const riskGeoJson = {
+      type: "FeatureCollection",
+      features: fireRiskResult.features,
+    };
+    mapStyle = {
+      ...MAP_STYLE,
+      sources: {
+        ...MAP_STYLE.sources,
+        "fire-risk-grid": { type: "geojson", data: riskGeoJson },
+      },
+      layers: [
+        ...MAP_STYLE.layers,
+        {
+          id: "fire-risk-grid-fill",
+          type: "fill",
+          source: "fire-risk-grid",
+          paint: {
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "risk_score"],
+              0,  "#064e3b",   // very low → deep emerald
+              20, "#059669",   // low → emerald
+              40, "#fbbf24",   // moderate → amber
+              60, "#f97316",   // elevated → orange
+              75, "#ef4444",   // high → red
+              90, "#991b1b",   // very high → dark red
+              100,"#7f1d1d",   // extreme → deepest red
+            ],
+            "fill-opacity": 0.65,
+          },
+        },
+        {
+          id: "fire-risk-grid-outline",
+          type: "line",
+          source: "fire-risk-grid",
+          paint: {
+            "line-color": "rgba(255,255,255,0.12)",
+            "line-width": 0.5,
+          },
+        },
+      ],
     };
   } else if (overlayTiles === "firms_hotspots" && firmsResult?.geojson) {
     mapStyle = {
@@ -1077,7 +1131,7 @@ function TerrainGuardianInner() {
                         ? 'bg-white/5 text-slate-500 cursor-not-allowed border border-white/10'
                         : 'bg-orange-500 text-black shadow-[0_0_30px_rgba(249,115,22,0.2)] hover:shadow-[0_0_40px_rgba(249,115,22,0.4)] hover:bg-orange-400'
                     }`}>
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flame className="w-4 h-4" />}
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
                     {loading ? "Querying FIRMS..." : "Find Fire Hotspots"}
                   </button>
 
@@ -1088,7 +1142,7 @@ function TerrainGuardianInner() {
                         ? 'bg-white/5 text-slate-500 cursor-not-allowed border border-white/10'
                         : 'bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.2)] hover:shadow-[0_0_40px_rgba(239,68,68,0.4)]'
                     }`}>
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>🧠</span>}
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />}
                     {loading ? "Predicting Risk..." : "Predict Fire Risk (ML Model)"}
                   </button>
                 </div>
@@ -1110,9 +1164,9 @@ function TerrainGuardianInner() {
               <AnimatePresence>
                 {fireRiskResult && fireEngine === "firms" && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                    className="bg-white/[0.02] border border-red-500/10 rounded-xl p-5 flex flex-col gap-4">
+                    className="bg-white/[0.03] backdrop-blur-sm border border-red-500/[0.12] rounded-xl p-5 flex flex-col gap-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     <h3 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase flex items-center gap-2">
-                      <span>🧠</span> ML Fire Risk Prediction
+                      <BrainCircuit className="w-3.5 h-3.5 text-red-400" /> ML Fire Risk Prediction
                     </h3>
 
                     {/* Risk Distribution */}
@@ -1227,7 +1281,7 @@ function TerrainGuardianInner() {
               {/* Generate Report Button */}
               {(fireResult || (firmsResult && firmsResult.total_points > 0) || fireRiskResult) && (
                 <button onClick={() => setShowFireReport(true)}
-                  className="w-full py-3.5 rounded-full text-sm font-semibold tracking-wide bg-orange-500 text-black shadow-[0_0_30px_rgba(249,115,22,0.2)] hover:shadow-[0_0_40px_rgba(249,115,22,0.4)] hover:bg-orange-400 transition-all flex items-center justify-center gap-2">
+                  className="w-full py-3.5 rounded-xl text-sm font-semibold tracking-wide bg-gradient-to-r from-orange-500/20 to-red-500/20 backdrop-blur-sm border border-orange-500/20 text-orange-300 shadow-[0_0_30px_rgba(249,115,22,0.1)] hover:from-orange-500/30 hover:to-red-500/30 hover:text-white hover:shadow-[0_0_40px_rgba(249,115,22,0.2)] transition-all flex items-center justify-center gap-2">
                   <BarChart3 className="w-4 h-4" /> Generate Fire Report
                 </button>
               )}
@@ -1489,6 +1543,14 @@ function TerrainGuardianInner() {
                          <span>Model Accuracy ({landslideEngine === 'gee' ? 'RF' : 'U-Net DL'}):</span>
                          <span className="font-mono text-emerald-400">{landslideResult.stats?.accuracy}%</span>
                       </div>
+
+                      {/* Generate Report Button */}
+                      <button
+                        onClick={() => setShowLandslideReport(true)}
+                        className="mt-3 w-full py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all bg-red-500/10 border border-red-500/20 text-red-300 hover:bg-red-500/20 flex items-center justify-center gap-2"
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" /> Generate Report
+                      </button>
                     </div>
 
                   </motion.div>
@@ -1829,8 +1891,8 @@ function TerrainGuardianInner() {
                             ? { id: "local_overlay", name: "Deep Learning Prediction", color: "border-purple-500", text: "text-purple-400" }
                             : null,
                           buildingResult.geojson 
-                            ? { id: "geojson_buildings", name: "Google Open Buildings (3D Models)", color: "border-orange-500", text: "text-orange-400" }
-                            : (buildingResult.tile_url ? { id: buildingResult.tile_url, name: "Google Open Buildings (2D Map)", color: "border-red-500", text: "text-red-400" } : null),
+                            ? { id: "geojson_buildings", name: "3D Buildings (Confidence Gradient)", color: "border-cyan-500", text: "text-cyan-400" }
+                            : (buildingResult.tile_url ? { id: buildingResult.tile_url, name: "Building Heatmap (Confidence)", color: "border-purple-500", text: "text-purple-400" } : null),
                         ].filter(Boolean).map((layer: any, i) => (
                           <button key={i} onClick={() => switchLayer(layer.id, layer.name)}
                             className={`flex items-center gap-3 p-3 rounded-lg border text-xs transition-all ${
@@ -1846,20 +1908,82 @@ function TerrainGuardianInner() {
                       </div>
                     </div>
 
-                    {/* Stats */}
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 mt-2">
-                      <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-4 uppercase">Urban Statistics</h3>
-                      
-                      <div className="space-y-3">
-                        {buildingResult.stats?.map((stat: any, index: number) => (
-                           <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                              <span className="text-xs font-semibold text-slate-300">{stat.name}</span>
-                              <span className="font-mono text-sm font-bold text-emerald-400">{stat.value}</span>
-                           </div>
+                    {/* Key Stats Cards */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-gradient-to-br from-purple-500/10 to-purple-900/5 border border-purple-500/20 rounded-xl p-3 text-center">
+                        <p className="text-[9px] text-purple-300/70 uppercase tracking-widest font-bold">Buildings</p>
+                        <p className="text-lg font-bold font-mono text-purple-300 mt-1">
+                          {buildingResult.building_count > 0 ? buildingResult.building_count.toLocaleString() : (buildingResult.stats?.[2]?.value || 'N/A')}
+                        </p>
+                      </div>
+                      <div className="bg-gradient-to-br from-cyan-500/10 to-cyan-900/5 border border-cyan-500/20 rounded-xl p-3 text-center">
+                        <p className="text-[9px] text-cyan-300/70 uppercase tracking-widest font-bold">Density</p>
+                        <p className="text-lg font-bold font-mono text-cyan-300 mt-1">
+                          {buildingResult.density_pct ? `${buildingResult.density_pct.toFixed(1)}%` : (buildingResult.stats?.[3]?.value || 'N/A')}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Density Classification Badge */}
+                    {buildingResult.density_class && (
+                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-cyan-500/20 flex items-center justify-center text-sm">
+                          {buildingResult.density_class.includes('Ultra') ? '🏙️' : 
+                           buildingResult.density_class.includes('High') ? '🏢' :
+                           buildingResult.density_class.includes('Medium') ? '🏘️' :
+                           buildingResult.density_class.includes('Low') ? '🏡' : '🌾'}
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Classification</p>
+                          <p className="text-xs font-semibold text-white">{buildingResult.density_class}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Confidence Mini-Bars */}
+                    {buildingResult.confidence_breakdown && Object.keys(buildingResult.confidence_breakdown).length > 0 && (
+                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                        <h3 className="text-[10px] font-mono tracking-widest text-slate-400 mb-3 uppercase">Confidence</h3>
+                        <div className="flex flex-col gap-2">
+                          {[['high', '#22d3ee', '≥0.8'], ['medium', '#a78bfa', '0.6-0.8'], ['low', '#64748b', '<0.6']]
+                            .filter(([key]) => buildingResult.confidence_breakdown[key as string]?.count > 0)
+                            .map(([key, color, range]) => {
+                              const b = buildingResult.confidence_breakdown[key as string];
+                              return (
+                                <div key={key as string} className="flex items-center gap-2">
+                                  <span className="text-[9px] text-slate-500 w-10 shrink-0 capitalize">{key as string}</span>
+                                  <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full transition-all" style={{ width: `${b.pct}%`, backgroundColor: color as string }} />
+                                  </div>
+                                  <span className="text-[9px] text-slate-500 font-mono w-10 text-right">{b.pct}%</span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Detailed Stats */}
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                      <h3 className="text-[10px] font-mono tracking-widest text-slate-400 mb-3 uppercase">Statistics</h3>
+                      <div className="flex flex-col gap-1">
+                        {buildingResult.stats?.slice(0, 6).map((stat: any, index: number) => (
+                          <div key={index} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                            <span className="text-[10px] text-slate-400">{stat.name}</span>
+                            <span className="font-mono text-[10px] font-semibold text-white">{stat.value}</span>
+                          </div>
                         ))}
                       </div>
-
                     </div>
+
+                    {/* View Full Report Button */}
+                    <button
+                      onClick={() => setShowBuildingReport(true)}
+                      className="w-full py-3 rounded-xl text-xs font-bold tracking-wider uppercase transition-all bg-gradient-to-r from-purple-600/20 to-cyan-600/20 border border-purple-500/30 text-purple-300 hover:from-purple-600/30 hover:to-cyan-600/30 hover:text-white flex items-center justify-center gap-2"
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      View Full Analytical Report
+                    </button>
 
                   </motion.div>
                 )}
@@ -1971,6 +2095,21 @@ function TerrainGuardianInner() {
         onClose={() => setShowDeforestReport(false)}
         deforestResult={deforestResult}
         getGeometry={getGeometry}
+      />
+
+      {/* Building Report Modal */}
+      <BuildingReport
+        isOpen={showBuildingReport}
+        onClose={() => setShowBuildingReport(false)}
+        buildingResult={buildingResult}
+      />
+
+      {/* Landslide Report Modal */}
+      <LandslideReport
+        isOpen={showLandslideReport}
+        onClose={() => setShowLandslideReport(false)}
+        landslideResult={landslideResult}
+        engine={landslideEngine}
       />
     </div>
   );

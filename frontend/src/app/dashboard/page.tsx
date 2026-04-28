@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2, Play, Settings2, BarChart3, AlertTriangle, ShieldCh
 import Link from "next/link";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
+import MiningReport from "@/components/MiningReport";
 
 // mapbox-gl-draw imports
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
@@ -261,6 +262,7 @@ export default function Dashboard() {
   const [reviewReason, setReviewReason] = useState("");
   const [reviewNotes, setReviewNotes] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showMiningReport, setShowMiningReport] = useState(false);
 
   // AbortController for cancelling the scan
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -601,6 +603,24 @@ export default function Dashboard() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Generate Report Button */}
+          <AnimatePresence>
+            {geoData && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+              >
+                <button
+                  onClick={() => setShowMiningReport(true)}
+                  className="w-full py-3 rounded-xl text-xs font-semibold tracking-wide transition-all bg-sky-500/10 border border-sky-500/20 text-sky-300 hover:bg-sky-500/20 flex items-center justify-center gap-2"
+                >
+                  <BarChart3 className="w-3.5 h-3.5" /> Generate Report
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </aside>
 
@@ -926,6 +946,15 @@ export default function Dashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Mining Report Modal */}
+      <MiningReport
+        isOpen={showMiningReport}
+        onClose={() => setShowMiningReport(false)}
+        geoData={geoData}
+        stats={stats}
+        patches={patches}
+      />
 
     </div>
   );

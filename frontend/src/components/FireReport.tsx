@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Printer, Flame, Loader2, Sun, Moon, Satellite, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw } from "lucide-react";
+import { X, Printer, Flame, Loader2, Sun, Moon, Satellite, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, BrainCircuit } from "lucide-react";
 import axios from "axios";
 
 interface FireReportProps {
@@ -233,7 +233,7 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-md overflow-y-auto py-8 px-4 print:bg-white print:p-0"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
@@ -241,40 +241,38 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.97 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="w-full max-w-2xl bg-[#060d1b]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.6),0_0_40px_rgba(249,115,22,0.05)] overflow-hidden print:shadow-none print:border-none"
+            className="w-full max-w-2xl bg-[#030712]/50 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.6)] overflow-hidden print:shadow-none print:border-none relative"
           >
+            {/* Ambient glow — matches sidebar */}
+            <div className="absolute top-0 left-0 w-full h-64 bg-orange-500/5 rounded-full blur-[100px] pointer-events-none" />
+
             {/* ═══ HEADER ═══ */}
-            <div className="flex items-center justify-between p-5 border-b border-white/[0.06] bg-gradient-to-r from-orange-500/[0.06] via-red-500/[0.03] to-transparent backdrop-blur-sm">
-              <div>
-                <h2 className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
-                  <Flame className="w-5 h-5 text-orange-400" />
-                  Forest Fire Analysis Report
-                </h2>
-                <p className="text-[11px] text-slate-400 mt-1 font-mono">
-                  NASA FIRMS + Sentinel-2 dNBR · India
-                </p>
+            <div className="relative z-10 p-6 border-b border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Flame className="w-4 h-4 text-orange-500" />
+                <span className="font-serif text-base font-medium tracking-[0.15em] text-white uppercase">Fire Report</span>
               </div>
               <div className="flex items-center gap-2 print:hidden">
                 <button onClick={() => window.print()}
-                  className="p-2.5 rounded-xl bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] text-slate-300 hover:bg-white/[0.12] hover:border-white/[0.15] transition-all"
+                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 transition-colors border border-white/10 text-slate-400 hover:text-white"
                   title="Print Report"><Printer className="w-4 h-4" /></button>
                 <button onClick={onClose}
-                  className="p-2.5 rounded-xl bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] text-slate-300 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 transition-all"
+                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-red-500/20 transition-colors border border-white/10 text-slate-400 hover:text-red-400"
                   title="Close"><X className="w-4 h-4" /></button>
               </div>
             </div>
 
-            <div className="p-5 flex flex-col gap-6">
+            <div className="relative z-10 flex-1 overflow-y-auto p-5 flex flex-col gap-5 custom-scrollbar">
 
               {/* ── dNBR Section (if available) ──────────────── */}
               {dnbrStats && (
-                <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <h3 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-3">
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
+                  <h3 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase mb-3">
                     Burn Severity Analysis (Sentinel-2 dNBR)
                   </h3>
                   <div className="flex flex-col gap-3 mb-3">
                     {/* Hero: Total Burned */}
-                    <div className="bg-red-500/[0.06] backdrop-blur-sm border border-red-500/[0.12] rounded-xl p-4 flex items-center justify-between shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center justify-between">
                       <div className="flex flex-col">
                         <span className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Total Burned Area</span>
                         <span className="text-[9px] text-slate-500 mt-0.5">Moderate + High severity only (USGS BAER)</span>
@@ -289,7 +287,7 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
                         { label: 'Moderate', value: `${dnbrStats.moderate_severity_ha} ha`, color: 'text-orange-400' },
                         { label: 'Low Severity', value: `${dnbrStats.low_severity_ha} ha`, color: 'text-yellow-400' },
                       ].map(s => (
-                        <div key={s.label} className="bg-white/[0.04] backdrop-blur-sm border border-white/[0.06] rounded-xl p-3.5 flex flex-col gap-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                        <div key={s.label} className="bg-white/[0.03] border border-white/5 rounded-xl p-3.5 flex flex-col gap-1">
                           <span className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">{s.label}</span>
                           <span className={`text-lg font-bold font-mono ${s.color}`}>{s.value}</span>
                         </div>
@@ -305,9 +303,10 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
               )}
 
               {/* ── FIRMS Stats Section ────────────────────── */}
-              <div className="bg-white/[0.03] backdrop-blur-sm border border-orange-500/[0.08] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="bg-white/[0.06] backdrop-blur-xl border border-white/[0.12] rounded-2xl p-5 shadow-[0_4px_24px_rgba(0,0,0,0.2),0_0_0_1px_rgba(255,255,255,0.04)_inset]">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold">
+                  <h3 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase flex items-center gap-2">
+                    <Satellite className="w-3.5 h-3.5 text-orange-400" />
                     NASA FIRMS Fire History
                   </h3>
                   {fetched && (
@@ -317,17 +316,17 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
                     </button>
                   )}
                 </div>
-                <p className="text-[10px] text-slate-400 mb-3">
+                <p className="text-[10px] text-slate-500 mb-3">
                   Historical fire detections from MODIS + VIIRS satellites.
                 </p>
 
                 {/* Date range picker */}
                 <div className="flex items-center gap-2 mb-3 print:hidden">
                   <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-orange-300 font-mono focus:border-orange-500/50 focus:outline-none" />
+                    className="flex-1 bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-orange-300 font-mono focus:border-orange-500/50 focus:outline-none transition-colors" />
                   <span className="text-slate-500 text-xs">→</span>
                   <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-orange-300 font-mono focus:border-orange-500/50 focus:outline-none" />
+                    className="flex-1 bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-orange-300 font-mono focus:border-orange-500/50 focus:outline-none transition-colors" />
                 </div>
 
                 {/* Loading state */}
@@ -355,9 +354,9 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 mt-4">
 
                     {/* Section 1: Donut + Summary (like LULC) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      <div className="bg-white/[0.04] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 flex flex-col items-center gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                        <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold w-full">Confidence Distribution</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col items-center gap-3">
+                        <h4 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase w-full">Confidence Distribution</h4>
                         <FireDonut stats={stats} />
                         {/* Legend */}
                         <div className="flex gap-3 mt-1">
@@ -374,8 +373,8 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
                         </div>
                       </div>
 
-                      <div className="bg-white/[0.04] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 flex flex-col gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                        <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold">Analysis Summary</h4>
+                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col gap-3">
+                        <h4 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase">Analysis Summary</h4>
                         <StatRow items={[
                           { label: 'Total Fires', value: stats.total_fires.toLocaleString(), color: 'text-orange-400' },
                           { label: 'Peak Month', value: stats.peak_month, color: 'text-red-400' },
@@ -388,10 +387,10 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
                     </div>
 
                     {/* Day/Night Split */}
-                    <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-3">Day / Night Distribution</h4>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
+                      <h4 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase mb-3">Day / Night Distribution</h4>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-amber-500/[0.06] backdrop-blur-sm border border-amber-500/[0.1] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
                           <Sun className="w-5 h-5 text-amber-400" />
                           <div className="flex flex-col">
                             <span className="text-lg font-bold font-mono text-amber-300">{stats.day_fires.toLocaleString()}</span>
@@ -400,7 +399,7 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-blue-500/[0.06] backdrop-blur-sm border border-blue-500/[0.1] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
                           <Moon className="w-5 h-5 text-blue-400" />
                           <div className="flex flex-col">
                             <span className="text-lg font-bold font-mono text-blue-300">{stats.night_fires.toLocaleString()}</span>
@@ -413,14 +412,14 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
                     </div>
 
                     {/* Monthly Chart (horizontal bars) */}
-                    <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                       <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4">Monthly Fire Frequency</h4>
                       <MonthlyBarChart data={stats.monthly_breakdown} />
                     </div>
 
                     {/* Yearly trend */}
                     {stats.yearly_trend && stats.yearly_trend.length > 1 && (
-                      <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                         <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4">
                           Yearly Fire Trend ({stats.date_range?.earliest?.slice(0, 4)} – {stats.date_range?.latest?.slice(0, 4)})
                         </h4>
@@ -430,7 +429,7 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
 
                     {/* Satellite breakdown */}
                     {stats.satellite_breakdown && (
-                      <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                         <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4 flex items-center gap-2">
                           <Satellite className="w-3.5 h-3.5 text-orange-400" />
                           Satellite Sources
@@ -473,9 +472,9 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
             {/* ── ML Fire Risk Prediction Section ─────────── */}
             {fireRiskResult && fireRiskResult.model_metrics && (
               <div className="px-6 py-5">
-                <div className="bg-gradient-to-br from-red-500/[0.06] to-orange-500/[0.04] backdrop-blur-sm border border-red-500/[0.1] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <h3 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4 flex items-center gap-2">
-                    <span>🧠</span> ML Fire Risk Prediction
+                <div className="bg-white/[0.02] border border-red-500/10 rounded-xl p-5">
+                  <h3 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase mb-4 flex items-center gap-2">
+                    <BrainCircuit className="w-3.5 h-3.5 text-red-400" /> ML Fire Risk Prediction
                   </h3>
 
                   {/* Model Info */}
@@ -488,7 +487,7 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
                       { label: 'Grid Size', value: `${fireRiskResult.grid_cell_size_km} km`, color: 'text-slate-300' },
                       { label: 'Validation Year', value: fireRiskResult.model_metrics.validation_year, color: 'text-slate-300' },
                     ].map(s => (
-                      <div key={s.label} className="bg-white/[0.04] rounded-lg p-2.5 flex flex-col gap-0.5">
+                      <div key={s.label} className="bg-white/[0.03] border border-white/5 rounded-xl p-3 flex flex-col gap-0.5">
                         <span className="text-[8px] text-slate-500 uppercase tracking-wider font-bold">{s.label}</span>
                         <span className={`text-sm font-bold font-mono ${s.color}`}>{s.value}</span>
                       </div>
@@ -547,7 +546,7 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
               </div>
             )}
             {/* Footer */}
-            <div className="px-5 py-3 border-t border-white/[0.06] bg-white/[0.01] flex items-center justify-between">
+            <div className="relative z-10 px-5 py-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-[9px] text-slate-600 font-mono">
                 Earth Watch · MRSAC · Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
               </span>

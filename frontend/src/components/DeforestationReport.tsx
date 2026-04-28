@@ -293,7 +293,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
     <AnimatePresence>
       {isOpen && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-md overflow-y-auto py-8 px-4 print:bg-white print:p-0"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
@@ -301,34 +301,32 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.97 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="w-full max-w-2xl bg-[#060d1b]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.6),0_0_40px_rgba(34,197,94,0.05)] overflow-hidden print:shadow-none print:border-none"
+            className="w-full max-w-2xl bg-[#030712]/50 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.6)] overflow-hidden print:shadow-none print:border-none relative"
           >
+            {/* Ambient glow */}
+            <div className="absolute top-0 left-0 w-full h-64 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none" />
+
             {/* ═══ HEADER ═══ */}
-            <div className="flex items-center justify-between p-5 border-b border-white/[0.06] bg-gradient-to-r from-green-500/[0.06] via-emerald-500/[0.03] to-transparent backdrop-blur-sm">
-              <div>
-                <h2 className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
-                  <TreePine className="w-5 h-5 text-green-400" />
-                  Deforestation Analysis Report
-                </h2>
-                <p className="text-[11px] text-slate-400 mt-1 font-mono">
-                  {stats?.source} · {stats?.start_year}–{stats?.end_year}
-                </p>
+            <div className="relative z-10 p-6 border-b border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <TreePine className="w-4 h-4 text-green-400" />
+                <span className="font-serif text-base font-medium tracking-[0.15em] text-white uppercase">Deforestation Report</span>
               </div>
               <div className="flex items-center gap-2 print:hidden">
                 <button onClick={() => window.print()}
-                  className="p-2.5 rounded-xl bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] text-slate-300 hover:bg-white/[0.12] hover:border-white/[0.15] transition-all"
+                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 transition-colors border border-white/10 text-slate-400 hover:text-white"
                   title="Print Report"><Printer className="w-4 h-4" /></button>
                 <button onClick={onClose}
-                  className="p-2.5 rounded-xl bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] text-slate-300 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 transition-all"
+                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-red-500/20 transition-colors border border-white/10 text-slate-400 hover:text-red-400"
                   title="Close"><X className="w-4 h-4" /></button>
               </div>
             </div>
 
-            <div className="p-5 flex flex-col gap-6">
+            <div className="relative z-10 p-5 flex flex-col gap-5">
 
               {/* ── Section 1: Hansen Donut + Summary ──────── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 flex flex-col items-center gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col items-center gap-3">
                   <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold w-full">Forest Composition</h4>
                   <ForestDonut stats={stats} />
                   <div className="flex gap-3 mt-1">
@@ -345,7 +343,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
                   </div>
                 </div>
 
-                <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 flex flex-col gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col gap-3">
                   <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold">Analysis Summary</h4>
                   <StatRow items={[
                     { label: 'Base Forest (2000)', value: `${stats?.base_forest_area_ha} ha`, color: 'text-green-400' },
@@ -362,7 +360,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
 
               {/* ── Section 2: Year-wise Loss Bar Chart ────── */}
               {yearlyLoss.length > 0 && (
-                <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                   <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4 flex items-center gap-2">
                     Year-wise Forest Loss ({stats?.start_year}–{stats?.end_year})
                     <span className="text-[8px] bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded-full font-bold normal-case tracking-normal">HANSEN 30m</span>
@@ -373,7 +371,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
 
               {/* ── Section 3: NDVI Time-Series (if available) */}
               {ndvi?.timeseries && ndvi.timeseries.length > 0 && (
-                <div className="bg-white/[0.03] backdrop-blur-sm border border-green-500/[0.08] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                   <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4 flex items-center gap-2">
                     🛰️ NDVI Time-Series ({ndvi.timeseries[0]?.year}–{ndvi.timeseries[ndvi.timeseries.length - 1]?.year})
                     <span className="text-[8px] bg-green-500/15 text-green-400 px-1.5 py-0.5 rounded-full font-bold normal-case tracking-normal">SENTINEL-2 10m</span>
@@ -384,7 +382,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
 
               {/* ── Section 4: Tree Area Time-Series ────────── */}
               {ndvi?.tree_area_timeseries && ndvi.tree_area_timeseries.length > 0 && (
-                <div className="bg-white/[0.03] backdrop-blur-sm border border-green-500/[0.08] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                   <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4">
                     Tree Cover Area (NDVI &gt; {ndvi.threshold})
                   </h4>
@@ -394,7 +392,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
 
               {/* ── Section 5: Histogram Comparison ──────────── */}
               {ndvi?.before_histogram && ndvi?.after_histogram && (
-                <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                   <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4">
                     NDVI Histogram Comparison
                   </h4>
@@ -407,7 +405,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
 
               {/* ── Section 6: Delta NDVI Stats ──────────────── */}
               {ndvi && (
-                <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                   <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-3">
                     NDVI Change Analysis
                   </h4>
@@ -418,7 +416,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
                       { label: 'NDVI Change', value: ndvi.ndvi_change?.toFixed(3), color: ndvi.ndvi_change < 0 ? 'text-red-400' : 'text-emerald-400' },
                       { label: 'Max Decline', value: ndvi.max_ndvi_decline?.toFixed(3), color: 'text-red-500' },
                     ].map(s => (
-                      <div key={s.label} className="bg-white/[0.04] backdrop-blur-sm border border-white/[0.06] rounded-xl p-3 flex flex-col gap-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                      <div key={s.label} className="bg-white/[0.03] border border-white/5 rounded-xl p-3 flex flex-col gap-1">
                         <span className="text-[8px] text-slate-500 uppercase tracking-wider font-bold">{s.label}</span>
                         <span className={`text-lg font-bold font-mono ${s.color}`}>{s.value}</span>
                       </div>
@@ -434,7 +432,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
             </div>
 
             {/* ═══ FOOTER ═══ */}
-            <div className="px-5 py-3 border-t border-white/[0.06] bg-white/[0.01] flex items-center justify-between">
+            <div className="relative z-10 px-5 py-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-[9px] text-slate-600 font-mono">
                 Earth Watch · MRSAC · Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
               </span>

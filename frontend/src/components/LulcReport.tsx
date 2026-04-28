@@ -246,7 +246,7 @@ export default function LulcReport({
   const stats = lulcResult?.stats;
   const classAreas: Record<string, number> = stats?.class_areas_km2 || {};
   const classPct: Record<string, number> = stats?.class_percentages || {};
-  const totalArea: number = stats?.total_area_km2 || 0;
+  const totalArea: number = Number(stats?.total_area_km2) || 0;
   const dominant: string = stats?.dominant_class || "N/A";
 
   // ── Add/Remove compare years ────────────────────────────────
@@ -311,7 +311,7 @@ export default function LulcReport({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm overflow-y-auto py-8 px-4 print:bg-white print:p-0"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
@@ -319,19 +319,17 @@ export default function LulcReport({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.97 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="w-full max-w-2xl bg-[#060d1b] border border-white/10 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.8)] overflow-hidden print:shadow-none print:border-none print:max-w-none print:rounded-none"
+            className="w-full max-w-2xl bg-[#030712]/50 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.6)] overflow-hidden print:shadow-none print:border-none print:max-w-none print:rounded-none relative"
             id="lulc-report-container"
           >
+            {/* Ambient glow */}
+            <div className="absolute top-0 left-0 w-full h-64 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none" />
+
             {/* ═══ HEADER ═══ */}
-            <div className="flex items-center justify-between p-5 border-b border-white/5 print:border-gray-200">
-              <div>
-                <h2 className="text-lg font-bold text-white tracking-wide flex items-center gap-2 print:text-black">
-                  <BarChart3 className="w-5 h-5 text-emerald-400 print:text-emerald-600" />
-                  LULC Analysis Report
-                </h2>
-                <p className="text-[11px] text-slate-400 mt-1 font-mono print:text-gray-500">
-                  {stats?.source} · {stats?.year} · {stats?.season?.toUpperCase()} · {stats?.resolution}
-                </p>
+            <div className="relative z-10 p-6 border-b border-white/5 flex items-center justify-between print:border-gray-200">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-emerald-400 print:text-emerald-600" />
+                <span className="font-serif text-base font-medium tracking-[0.15em] text-white uppercase print:text-black">LULC Report</span>
               </div>
               <div className="flex items-center gap-2 print:hidden">
                 <button
@@ -352,7 +350,7 @@ export default function LulcReport({
             </div>
 
             {/* ═══ REPORT BODY ═══ */}
-            <div className="p-5 flex flex-col gap-6">
+            <div className="relative z-10 p-5 flex flex-col gap-5">
 
               {/* ── Section 1: Donut + Stats ────────────────── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -486,7 +484,7 @@ export default function LulcReport({
             </div>
 
             {/* ═══ FOOTER ═══ */}
-            <div className="px-5 py-3 border-t border-white/5 flex items-center justify-between">
+            <div className="relative z-10 px-5 py-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-[9px] text-slate-600 font-mono">
                 Earth Watch · MRSAC · Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
               </span>

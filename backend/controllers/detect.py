@@ -132,15 +132,59 @@ def analyze_area(req: GeoJSONRequest):
             logger.error(f"Verified mines cross-ref error: {e}")
 
         # ── Stats ─────────────────────────────────────────────────
-        stats = {"total": len(features), "illegal": 0, "suspect": 0, "legal": 0}
+        stats = {"total": len(features), "illegal": 0, "suspect": 0, "legal": 0, "unverified": 0}
+        all_areas = []
+        all_ious = []
+        centroid_inside_count = 0
+        verdict_breakdown: dict = {}
+
         for f in features:
-            v = f.get("properties", {}).get("verdict", "UNVERIFIED")
+            props = f.get("properties", {})
+            v = props.get("verdict", "UNVERIFIED")
+            area = float(props.get("area_km2", 0) or 0)
+            iou = float(props.get("iou", 0) or 0)
+
             if v == "ILLEGAL":
                 stats["illegal"] += 1
             elif v == "SUSPECT":
                 stats["suspect"] += 1
             elif v in ("LEGAL", "USER_LEGAL"):
                 stats["legal"] += 1
+            else:
+                stats["unverified"] += 1
+
+            all_areas.append(area)
+            if iou > 0:
+                all_ious.append(iou)
+            if props.get("centroid_inside"):
+                centroid_inside_count += 1
+
+            if v not in verdict_breakdown:
+                verdict_breakdown[v] = {"count": 0, "total_area_km2": 0}
+            verdict_breakdown[v]["count"] += 1
+            verdict_breakdown[v]["total_area_km2"] = round(verdict_breakdown[v]["total_area_km2"] + area, 4)
+
+        stats["total_area_km2"] = round(sum(all_areas), 4) if all_areas else 0
+        stats["avg_area_km2"] = round(sum(all_areas) / len(all_areas), 4) if all_areas else 0
+        stats["max_area_km2"] = round(max(all_areas), 4) if all_areas else 0
+        stats["min_area_km2"] = round(min(all_areas), 4) if all_areas else 0
+        stats["avg_iou"] = round(sum(all_ious) / len(all_ious), 4) if all_ious else 0
+        stats["max_iou"] = round(max(all_ious), 4) if all_ious else 0
+        stats["min_iou"] = round(min(all_ious), 4) if all_ious else 0
+        stats["centroid_inside_count"] = centroid_inside_count
+        stats["verdict_breakdown"] = verdict_breakdown
+        stats["model_info"] = {
+            "architecture": "ResNet34 · UNet + SCSE Attention",
+            "input_channels": 11,
+            "input_bands": "B2–B12 (Sentinel-2 SR Harmonized)",
+            "tile_size_km": 5.0,
+            "resolution_m": 10,
+            "seg_threshold": 0.50,
+            "mine_threshold": 0.50,
+            "iou_legal_threshold": 0.30,
+            "iou_suspect_threshold": 0.10,
+            "classification": "PostGIS spatial comparison with legal_mines DB",
+        }
 
         return {
             "status":  "success",
