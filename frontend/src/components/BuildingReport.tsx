@@ -3,10 +3,11 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Printer, BarChart3, Building2, MapPinned,
+  X, BarChart3, Building2, MapPinned,
   ShieldCheck, TrendingUp, Gauge, Grid3X3, Layers,
-  Cpu, Globe2
+  Cpu, Globe2, Download
 } from "lucide-react";
+import { useReportPDF } from "./useReportPDF";
 
 // ── Types ────────────────────────────────────────────────────
 interface BuildingReportProps {
@@ -196,7 +197,7 @@ function StatCard({ icon, label, value, accent }: {
 //  MAIN BUILDING REPORT COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function BuildingReport({ isOpen, onClose, buildingResult }: BuildingReportProps) {
-  const handlePrint = () => window.print();
+  const { reportRef, reportId, reportTime, isExporting, downloadPDF } = useReportPDF("BLDG");
 
   if (!isOpen || !buildingResult) return null;
 
@@ -221,7 +222,7 @@ export default function BuildingReport({ isOpen, onClose, buildingResult }: Buil
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0 pointer-events-auto"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
@@ -242,9 +243,9 @@ export default function BuildingReport({ isOpen, onClose, buildingResult }: Buil
                 <span className="font-serif text-base font-medium tracking-[0.15em] text-white uppercase print:text-black">Building Report</span>
               </div>
               <div className="flex items-center gap-2 print:hidden">
-                <button onClick={handlePrint}
-                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 transition-colors border border-white/10 text-slate-400 hover:text-white"
-                  title="Print Report"><Printer className="w-4 h-4" /></button>
+                <button onClick={downloadPDF} disabled={isExporting}
+                  className="flex items-center justify-center gap-1.5 h-10 px-4 rounded-full bg-purple-500/10 hover:bg-purple-500/20 transition-colors border border-purple-500/20 text-purple-400 hover:text-purple-300 text-xs font-semibold disabled:opacity-50"
+                  title="Download PDF">{isExporting ? <span className="animate-spin">⏳</span> : <Download className="w-3.5 h-3.5" />} PDF</button>
                 <button onClick={onClose}
                   className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-red-500/20 transition-colors border border-white/10 text-slate-400 hover:text-red-400"
                   title="Close Report"><X className="w-4 h-4" /></button>
@@ -252,7 +253,7 @@ export default function BuildingReport({ isOpen, onClose, buildingResult }: Buil
             </div>
 
             {/* ═══ REPORT BODY ═══ */}
-            <div className="relative z-10 p-5 flex flex-col gap-5">
+            <div ref={reportRef} className="relative z-10 p-5 flex flex-col gap-5">
 
               {/* ── Section 1: Key Metrics Grid ────────────── */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -417,7 +418,7 @@ export default function BuildingReport({ isOpen, onClose, buildingResult }: Buil
             {/* ═══ FOOTER ═══ */}
             <div className="relative z-10 px-5 py-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-[9px] text-slate-600 font-mono">
-                Earth Watch · MRSAC · Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                Earth Watch · MRSAC · {reportId} · {reportTime}
               </span>
               <span className="text-[9px] text-slate-600 font-mono">
                 Google Open Buildings V3 · GEE · Maxar

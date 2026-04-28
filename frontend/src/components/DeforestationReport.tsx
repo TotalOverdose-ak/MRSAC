@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Printer, TreePine, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { X, TreePine, TrendingUp, TrendingDown, Minus, Download } from "lucide-react";
+import { useReportPDF } from "./useReportPDF";
 
 interface DeforestationReportProps {
   isOpen: boolean;
@@ -283,6 +284,7 @@ function StatRow({ items }: { items: { label: string; value: string | number; co
 //  MAIN DEFORESTATION REPORT COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function DeforestationReport({ isOpen, onClose, deforestResult, getGeometry }: DeforestationReportProps) {
+  const { reportRef, reportId, reportTime, isExporting, downloadPDF } = useReportPDF("DFST");
   if (!isOpen || !deforestResult) return null;
 
   const stats = deforestResult.stats;
@@ -293,7 +295,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
     <AnimatePresence>
       {isOpen && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0 pointer-events-auto"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
@@ -313,16 +315,16 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
                 <span className="font-serif text-base font-medium tracking-[0.15em] text-white uppercase">Deforestation Report</span>
               </div>
               <div className="flex items-center gap-2 print:hidden">
-                <button onClick={() => window.print()}
-                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 transition-colors border border-white/10 text-slate-400 hover:text-white"
-                  title="Print Report"><Printer className="w-4 h-4" /></button>
+                <button onClick={downloadPDF} disabled={isExporting}
+                  className="flex items-center justify-center gap-1.5 h-10 px-4 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-semibold disabled:opacity-50"
+                  title="Download PDF">{isExporting ? <span className="animate-spin">⏳</span> : <Download className="w-3.5 h-3.5" />} PDF</button>
                 <button onClick={onClose}
                   className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-red-500/20 transition-colors border border-white/10 text-slate-400 hover:text-red-400"
                   title="Close"><X className="w-4 h-4" /></button>
               </div>
             </div>
 
-            <div className="relative z-10 p-5 flex flex-col gap-5">
+            <div ref={reportRef} className="relative z-10 p-5 flex flex-col gap-5">
 
               {/* ── Section 1: Hansen Donut + Summary ──────── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -434,7 +436,7 @@ export default function DeforestationReport({ isOpen, onClose, deforestResult, g
             {/* ═══ FOOTER ═══ */}
             <div className="relative z-10 px-5 py-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-[9px] text-slate-600 font-mono">
-                Earth Watch · MRSAC · Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                Earth Watch · MRSAC · {reportId} · {reportTime}
               </span>
               <span className="text-[9px] text-slate-600 font-mono">Hansen GFC + Sentinel-2 SR</span>
             </div>

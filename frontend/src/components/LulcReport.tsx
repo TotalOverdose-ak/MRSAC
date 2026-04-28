@@ -2,8 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Printer, BarChart3, Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { X, BarChart3, Loader2, TrendingUp, TrendingDown, Minus, Download } from "lucide-react";
 import axios from "axios";
+import { useReportPDF } from "./useReportPDF";
 
 // ── Types ────────────────────────────────────────────────────
 interface LulcReportProps {
@@ -235,6 +236,7 @@ function ChangeCards({ yearData }: {
 export default function LulcReport({
   isOpen, onClose, lulcResult, lulcYear, lulcSeason, lulcModel, getGeometry,
 }: LulcReportProps) {
+  const { reportRef, reportId, reportTime, isExporting, downloadPDF } = useReportPDF("LULC");
 
   // Multi-year comparison state
   const [compareYears, setCompareYears] = useState<number[]>([]);
@@ -298,9 +300,6 @@ export default function LulcReport({
     setComparisonDone(true);
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
 
   if (!isOpen || !lulcResult) return null;
 
@@ -311,7 +310,7 @@ export default function LulcReport({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0 pointer-events-auto"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
@@ -332,25 +331,17 @@ export default function LulcReport({
                 <span className="font-serif text-base font-medium tracking-[0.15em] text-white uppercase print:text-black">LULC Report</span>
               </div>
               <div className="flex items-center gap-2 print:hidden">
-                <button
-                  onClick={handlePrint}
-                  className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white transition-all"
-                  title="Print Report"
-                >
-                  <Printer className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={onClose}
+                <button onClick={downloadPDF} disabled={isExporting}
+                  className="flex items-center justify-center gap-1.5 h-10 px-4 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 text-emerald-400 hover:text-emerald-300 text-xs font-semibold disabled:opacity-50"
+                  title="Download PDF">{isExporting ? <span className="animate-spin">⏳</span> : <Download className="w-3.5 h-3.5" />} PDF</button>
+                <button onClick={onClose}
                   className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-all"
-                  title="Close Report"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                  title="Close Report"><X className="w-4 h-4" /></button>
               </div>
             </div>
 
             {/* ═══ REPORT BODY ═══ */}
-            <div className="relative z-10 p-5 flex flex-col gap-5">
+            <div ref={reportRef} className="relative z-10 p-5 flex flex-col gap-5">
 
               {/* ── Section 1: Donut + Stats ────────────────── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -486,7 +477,7 @@ export default function LulcReport({
             {/* ═══ FOOTER ═══ */}
             <div className="relative z-10 px-5 py-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-[9px] text-slate-600 font-mono">
-                Earth Watch · MRSAC · Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                Earth Watch · MRSAC · {reportId} · {reportTime}
               </span>
               <span className="text-[9px] text-slate-600 font-mono">
                 Sentinel-2 · 10m · Google Dynamic World V1

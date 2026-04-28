@@ -3,9 +3,10 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Printer, Mountain, BarChart3, ShieldAlert,
-  Cpu, Target, TrendingUp, Layers
+  X, Mountain, BarChart3, ShieldAlert,
+  Cpu, Target, TrendingUp, Layers, Download
 } from "lucide-react";
+import { useReportPDF } from "./useReportPDF";
 
 // ── Types ────────────────────────────────────────────────────
 interface LandslideReportProps {
@@ -145,6 +146,7 @@ function StatRow({ items }: { items: { label: string; value: string | number; co
 //  MAIN LANDSLIDE REPORT COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function LandslideReport({ isOpen, onClose, landslideResult, engine }: LandslideReportProps) {
+  const { reportRef, reportId, reportTime, isExporting, downloadPDF } = useReportPDF("LSLD");
   if (!isOpen || !landslideResult) return null;
 
   const stats = landslideResult?.stats || {};
@@ -160,7 +162,7 @@ export default function LandslideReport({ isOpen, onClose, landslideResult, engi
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0 pointer-events-auto"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
@@ -180,9 +182,9 @@ export default function LandslideReport({ isOpen, onClose, landslideResult, engi
                 <span className="font-serif text-base font-medium tracking-[0.15em] text-white uppercase">Landslide Report</span>
               </div>
               <div className="flex items-center gap-2 print:hidden">
-                <button onClick={() => window.print()}
-                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 transition-colors border border-white/10 text-slate-400 hover:text-white"
-                  title="Print Report"><Printer className="w-4 h-4" /></button>
+                <button onClick={downloadPDF} disabled={isExporting}
+                  className="flex items-center justify-center gap-1.5 h-10 px-4 rounded-full bg-red-500/10 hover:bg-red-500/20 transition-colors border border-red-500/20 text-red-400 hover:text-red-300 text-xs font-semibold disabled:opacity-50"
+                  title="Download PDF">{isExporting ? <span className="animate-spin">⏳</span> : <Download className="w-3.5 h-3.5" />} PDF</button>
                 <button onClick={onClose}
                   className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-red-500/20 transition-colors border border-white/10 text-slate-400 hover:text-red-400"
                   title="Close"><X className="w-4 h-4" /></button>
@@ -190,7 +192,7 @@ export default function LandslideReport({ isOpen, onClose, landslideResult, engi
             </div>
 
             {/* ═══ BODY ═══ */}
-            <div className="relative z-10 p-5 flex flex-col gap-5">
+            <div ref={reportRef} className="relative z-10 p-5 flex flex-col gap-5">
 
               {/* ── Section 1: Key Metrics Grid ─────────── */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -339,7 +341,7 @@ export default function LandslideReport({ isOpen, onClose, landslideResult, engi
             {/* ═══ FOOTER ═══ */}
             <div className="relative z-10 px-5 py-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-[9px] text-slate-600 font-mono">
-                Earth Watch · MRSAC · Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                Earth Watch · MRSAC · {reportId} · {reportTime}
               </span>
               <span className="text-[9px] text-slate-600 font-mono">
                 {isGEE ? "GEE · Random Forest · HydroSHEDS" : "Sentinel-2 · Landslide4Sense · U-Net"}

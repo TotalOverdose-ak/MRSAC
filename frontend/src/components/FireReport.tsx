@@ -2,8 +2,9 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Printer, Flame, Loader2, Sun, Moon, Satellite, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, BrainCircuit } from "lucide-react";
+import { X, Flame, Loader2, Sun, Moon, Satellite, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, BrainCircuit, Download } from "lucide-react";
 import axios from "axios";
+import { useReportPDF } from "./useReportPDF";
 
 interface FireReportProps {
   isOpen: boolean;
@@ -183,6 +184,7 @@ function StatRow({ items }: { items: { label: string; value: string | number; su
 //  MAIN FIRE REPORT COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult, getGeometry }: FireReportProps) {
+  const { reportRef, reportId, reportTime, isExporting, downloadPDF } = useReportPDF("FIRE");
 
   const [firmsStats, setFirmsStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -233,7 +235,7 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 overflow-y-auto py-8 px-4 print:bg-white print:p-0 pointer-events-auto"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
@@ -253,16 +255,16 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
                 <span className="font-serif text-base font-medium tracking-[0.15em] text-white uppercase">Fire Report</span>
               </div>
               <div className="flex items-center gap-2 print:hidden">
-                <button onClick={() => window.print()}
-                  className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 transition-colors border border-white/10 text-slate-400 hover:text-white"
-                  title="Print Report"><Printer className="w-4 h-4" /></button>
+                <button onClick={downloadPDF} disabled={isExporting}
+                  className="flex items-center justify-center gap-1.5 h-10 px-4 rounded-full bg-orange-500/10 hover:bg-orange-500/20 transition-colors border border-orange-500/20 text-orange-400 hover:text-orange-300 text-xs font-semibold disabled:opacity-50"
+                  title="Download PDF">{isExporting ? <span className="animate-spin">⏳</span> : <Download className="w-3.5 h-3.5" />} PDF</button>
                 <button onClick={onClose}
                   className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-red-500/20 transition-colors border border-white/10 text-slate-400 hover:text-red-400"
                   title="Close"><X className="w-4 h-4" /></button>
               </div>
             </div>
 
-            <div className="relative z-10 flex-1 overflow-y-auto p-5 flex flex-col gap-5 custom-scrollbar">
+            <div ref={reportRef} className="relative z-10 flex-1 overflow-y-auto p-5 flex flex-col gap-5 custom-scrollbar">
 
               {/* ── dNBR Section (if available) ──────────────── */}
               {dnbrStats && (
@@ -548,7 +550,7 @@ export default function FireReport({ isOpen, onClose, fireResult, fireRiskResult
             {/* Footer */}
             <div className="relative z-10 px-5 py-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-[9px] text-slate-600 font-mono">
-                Earth Watch · MRSAC · Generated {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                Earth Watch · MRSAC · {reportId} · {reportTime}
               </span>
               <span className="text-[9px] text-slate-600 font-mono">NASA FIRMS · MODIS + VIIRS</span>
             </div>
