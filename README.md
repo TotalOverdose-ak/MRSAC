@@ -1,4 +1,4 @@
-# Earth Watch — Illegal Mine Detection System
+# Earth Watch 
 
 AI-powered geospatial system for detecting illegal mines using Sentinel-2 satellite imagery, a ResNet34+UNet dual-head model, and PostGIS legal classification.
 

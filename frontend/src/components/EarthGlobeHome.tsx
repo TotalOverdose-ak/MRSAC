@@ -17,7 +17,7 @@ export default function EarthGlobeHome() {
       if (globeEl.current) {
         globeEl.current.controls().autoRotate = false;
         globeEl.current.controls().enableZoom = true;
-        globeEl.current.pointOfView({ altitude: 2 });
+        globeEl.current.pointOfView({ altitude: 2.8 });
         clearInterval(interval);
       }
     }, 100);
@@ -52,7 +52,7 @@ export default function EarthGlobeHome() {
   }, []);
 
   return (
-    <div className="w-[1000px] h-[1000px] md:w-[1600px] md:h-[1600px] pointer-events-auto cursor-grab active:cursor-grabbing flex items-center justify-center filter drop-shadow-[0_0_60px_rgba(77,166,255,0.4)]">
+    <div className="w-[700px] h-[700px] md:w-[1000px] md:h-[1000px] pointer-events-auto cursor-grab active:cursor-grabbing flex items-center justify-center filter drop-shadow-[0_0_60px_rgba(77,166,255,0.4)]">
       <Globe
         ref={globeEl}
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
@@ -60,8 +60,8 @@ export default function EarthGlobeHome() {
         backgroundColor="rgba(0,0,0,0)"
         atmosphereColor="#4da6ff"
         atmosphereAltitude={0.15}
-        width={1600} 
-        height={1600}
+        width={1000} 
+        height={1000}
         animateIn={true}
       />
     </div>

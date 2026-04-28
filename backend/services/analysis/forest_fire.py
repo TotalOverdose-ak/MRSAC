@@ -10,12 +10,13 @@ from .gee_utils import init_gee, safe_get_info, get_map_tiles
 
 logger = logging.getLogger(__name__)
 
-# USGS Burn Severity Classification thresholds
+# USGS Burn Severity Classification (Key & Benson, 2006; MTBS standard)
 SEVERITY_CLASSES = {
-    'unburned':  {'min': -0.50, 'max': 0.10, 'color': '#1a9850', 'label': 'Unburned / Regrowth'},
-    'low':       {'min': 0.10,  'max': 0.27, 'color': '#fee08b', 'label': 'Low Severity'},
-    'moderate':  {'min': 0.27,  'max': 0.66, 'color': '#fc8d59', 'label': 'Moderate Severity'},
-    'high':      {'min': 0.66,  'max': 1.30, 'color': '#d73027', 'label': 'High Severity'},
+    'unburned':      {'min': -0.50, 'max': 0.10, 'color': '#1a9850', 'label': 'Unburned / Regrowth'},
+    'low':           {'min': 0.10,  'max': 0.27, 'color': '#fee08b', 'label': 'Low Severity'},
+    'moderate':      {'min': 0.27,  'max': 0.44, 'color': '#fc8d59', 'label': 'Moderate Severity'},
+    'moderate_high': {'min': 0.44,  'max': 0.66, 'color': '#e34a33', 'label': 'Moderate-High Severity'},
+    'high':          {'min': 0.66,  'max': 1.30, 'color': '#d73027', 'label': 'High Severity'},
 }
 
 
@@ -123,8 +124,10 @@ def analyze_burn_severity(geojson_geom, pre_start, pre_end, post_start, post_end
         severity_areas[key] = area_ha
         print(f'[FIRE]   {cls["label"]}: {area_ha} ha')
 
-    total_burned = round(sum(severity_areas.values()), 2)
-    print(f'[FIRE]   Total Burned Area: {total_burned} ha')
+    # Total burned = moderate + moderate_high + high only (USGS BAER standard)
+    # Low severity (0.1-0.27) often includes natural vegetation variation, not real fire damage
+    total_burned = round(sum(v for k, v in severity_areas.items() if k != 'low'), 2)
+    print(f'[FIRE]   Total Burned Area (moderate+): {total_burned} ha')
 
     # ── STATS ─────────────────────────────────────────────────
     stats = {
@@ -135,6 +138,7 @@ def analyze_burn_severity(geojson_geom, pre_start, pre_end, post_start, post_end
         'post_images': int(post_count or 0),
         'low_severity_ha': severity_areas.get('low', 0),
         'moderate_severity_ha': severity_areas.get('moderate', 0),
+        'moderate_high_severity_ha': severity_areas.get('moderate_high', 0),
         'high_severity_ha': severity_areas.get('high', 0),
         'total_burned_ha': total_burned,
     }
@@ -150,15 +154,19 @@ def analyze_burn_severity(geojson_geom, pre_start, pre_end, post_start, post_end
     post_rgb = s2_post.select(['B4', 'B3', 'B2']).visualize(
         min=0.04, max=0.24, gamma=1.0)
 
-    # dNBR severity heatmap
+    # dNBR severity heatmap (full range up to 1.3 for proper high-severity colors)
     severity_vis = dnbr.visualize(
-        min=-0.1, max=0.66,
-        palette=['#1a9850', '#91cf60', '#fee08b', '#fc8d59', '#d73027']
+        min=-0.1, max=1.3,
+        palette=['#1a9850', '#91cf60', '#d9ef8b', '#fee08b', '#fc8d59', '#e34a33', '#d73027', '#a50026']
     )
 
-    # Burned area mask (dNBR > 0.1 = any burn)
-    burned_mask = dnbr.gte(0.1).selfMask()
-    burned_vis = burned_mask.visualize(palette=['#FF4444'])
+    # Burned area mask (dNBR > 0.27 = moderate+ burn, USGS standard)
+    burned_mask = dnbr.gte(0.27).selfMask()
+    # Use graduated palette showing severity within burned area
+    burned_vis = dnbr.updateMask(burned_mask).visualize(
+        min=0.27, max=1.0,
+        palette=['#fc8d59', '#ef6548', '#d73027', '#a50026']
+    )
 
     tiles = {}
     for name, vis in [('pre_rgb_tiles', pre_rgb),

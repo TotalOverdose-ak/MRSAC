@@ -140,3 +140,54 @@ def calc_area_km2(mask, region, scale=10):
         scale=scale,
         maxPixels=1e10
     )
+
+
+def get_s2_ndvi_timeseries(region, start_year, end_year, months=(1, 12)):
+    """Compute mean NDVI per year using Sentinel-2 composites.
+
+    Returns list of {'year': int, 'mean_ndvi': float}.
+    Sentinel-2 data is only available from 2017 onwards.
+    """
+    init_gee()
+    effective_start = max(start_year, 2017)
+    results = []
+    for yr in range(effective_start, end_year + 1):
+        try:
+            composite = get_s2_composite(region, yr, months)
+            ndvi = compute_ndvi_s2(composite)
+            mean_val = safe_get_info(
+                ndvi.reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=region,
+                    scale=10,
+                    maxPixels=1e9,
+                ).get('NDVI'), 0
+            )
+            results.append({'year': yr, 'mean_ndvi': round(float(mean_val or 0), 4)})
+            logger.info(f"NDVI timeseries {yr}: {mean_val}")
+        except Exception as e:
+            logger.warning(f"NDVI timeseries failed for {yr}: {e}")
+            results.append({'year': yr, 'mean_ndvi': 0})
+    return results
+
+
+def get_ndvi_histogram_data(ndvi_image, region, num_buckets=30):
+    """Extract histogram bin data from an NDVI image.
+
+    Returns list of {'bin': float, 'count': int}.
+    """
+    try:
+        hist = safe_get_info(
+            ndvi_image.reduceRegion(
+                reducer=ee.Reducer.fixedHistogram(-0.2, 1.0, num_buckets),
+                geometry=region,
+                scale=10,
+                maxPixels=1e9,
+            ).get('NDVI'), []
+        )
+        if hist:
+            return [{'bin': round(float(row[0]), 3), 'count': int(row[1])} for row in hist]
+        return []
+    except Exception as e:
+        logger.warning(f"Histogram extraction failed: {e}")
+        return []

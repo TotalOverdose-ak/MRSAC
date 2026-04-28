@@ -1,16 +1,23 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Map, { Source, Layer, NavigationControl, MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   ArrowLeft, Loader2, MapIcon, Layers, ChevronDown, Square, Hexagon, Trash2,
-  TreePine, Flame, Snowflake, Mountain, Globe2, Trees, Building2
+  TreePine, Flame, Snowflake, Mountain, Globe2, Trees, Building2,
+  Satellite, BarChart3, MapPinned, Leaf, Factory, Droplets, Home, Wheat,
+  Cloud, Cpu, Calendar, Sun, CloudRain, CloudSun, Waves, Sprout,
+  Target, ShieldAlert, ShieldCheck, Zap, ScanSearch, BrainCircuit
 } from "lucide-react";
 import Link from "next/link";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
+import LulcReport from "@/components/LulcReport";
+import FireReport from "@/components/FireReport";
+import DeforestationReport from "@/components/DeforestationReport";
+import CustomSelect from "@/components/CustomSelect";
 
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 // @ts-ignore
@@ -78,7 +85,7 @@ const DW_COLORS: Record<string, string> = {
   Crops: '#E49635', 'Shrub & Scrub': '#DFC35A', 'Built Area': '#C4281B', 'Bare Ground': '#A59B8F', 'Snow & Ice': '#B39FE1',
 };
 
-export default function TerrainGuardian() {
+function TerrainGuardianInner() {
   const mapRef = useRef<MapRef | null>(null);
   const [viewState, setViewState] = useState({ longitude: 78.9, latitude: 22.5, zoom: 5 });
 
@@ -108,6 +115,7 @@ export default function TerrainGuardian() {
   const [lulcSeason, setLulcSeason] = useState("annual");
   const [lulcModel, setLulcModel] = useState("dynamic_world");
   const [lulcResult, setLulcResult] = useState<any>(null);
+  const [showLulcReport, setShowLulcReport] = useState(false);
 
   // HITL Active Learning State
   const [hitlClass, setHitlClass] = useState("1");
@@ -118,13 +126,26 @@ export default function TerrainGuardian() {
   const [defEndYear, setDefEndYear] = useState(2023);
   const [defMinCanopy, setDefMinCanopy] = useState(20);
   const [deforestResult, setDeforestResult] = useState<any>(null);
+  const [showDeforestReport, setShowDeforestReport] = useState(false);
+  const [defIncludeNdvi, setDefIncludeNdvi] = useState(false);
+  const [defNdviBefore, setDefNdviBefore] = useState(2018);
+  const [defNdviAfter, setDefNdviAfter] = useState(new Date().getFullYear());
+  const [defNdviThreshold, setDefNdviThreshold] = useState(0.4);
+  const [defSeason, setDefSeason] = useState("annual");
   
   // Fire State
+  const [fireEngine, setFireEngine] = useState("gee_dnbr");
   const [firePreStart, setFirePreStart] = useState("2023-01-01");
   const [firePreEnd, setFirePreEnd] = useState("2023-05-01");
   const [firePostStart, setFirePostStart] = useState("2023-05-02");
   const [firePostEnd, setFirePostEnd] = useState("2023-09-01");
+  const [firmsStartDate, setFirmsStartDate] = useState("2020-01-01");
+  const [firmsEndDate, setFirmsEndDate] = useState("2025-12-31");
+  const [firmsConfidence, setFirmsConfidence] = useState(30);
   const [fireResult, setFireResult] = useState<any>(null);
+  const [firmsResult, setFirmsResult] = useState<any>(null);
+  const [fireRiskResult, setFireRiskResult] = useState<any>(null);
+  const [showFireReport, setShowFireReport] = useState(false);
   
   // Snow State
   const [snowYear, setSnowYear] = useState(2024);
@@ -325,6 +346,51 @@ export default function TerrainGuardian() {
     setLoading(false);
   };
 
+  // ── FIRMS Hotspot Query ────────────────────────────────────
+  const runFireHotspots = async () => {
+    const geom = getGeometry();
+    if (!geom) return;
+    setLoading(true);
+    try {
+      const serverUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await axios.post(`${serverUrl}/api/fire/hotspots`, {
+        geojson: geom,
+        start_date: firmsStartDate,
+        end_date: firmsEndDate,
+        confidence_min: firmsConfidence,
+        max_points: 15000,
+      });
+      setFirmsResult(res.data);
+      if (res.data.geojson) {
+        setOverlayTiles("firms_hotspots");
+        setOverlayName(`FIRMS Hotspots (${res.data.total_points} fires)`);
+      }
+    } catch (err: any) {
+      alert(`FIRMS query failed: ${err?.response?.data?.detail || err.message}`);
+    }
+    setLoading(false);
+  };
+
+  // ── Fire Risk Prediction (ML) ──────────────────────────────
+  const runFireRiskPrediction = async () => {
+    const geom = getGeometry();
+    if (!geom) return;
+    setLoading(true);
+    try {
+      const serverUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await axios.post(`${serverUrl}/api/fire/risk`, {
+        geojson: geom,
+        cell_size: 0.01,
+      });
+      setFireRiskResult(res.data);
+      setOverlayTiles("fire_risk_grid");
+      setOverlayName(`Fire Risk Prediction (${res.data.risk_summary?.total_cells || 0} cells)`);
+    } catch (err: any) {
+      alert(`Fire risk prediction failed: ${err?.response?.data?.detail || err.message}`);
+    }
+    setLoading(false);
+  };
+
   // ── Snow Cover Analysis ────────────────────────────────────
   const runSnow = async () => {
     const geom = getGeometry();
@@ -511,11 +577,21 @@ export default function TerrainGuardian() {
     setLoading(true);
     try {
       const serverUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const seasonMonths: Record<string, [number, number]> = {
+        annual: [1, 12], kharif: [6, 10], rabi: [11, 3], winter: [12, 2], summer: [3, 5],
+      };
+      const [sStart, sEnd] = seasonMonths[defSeason] || [1, 12];
       const res = await axios.post(`${serverUrl}/api/deforestation`, {
         geojson: geom,
         start_year: defStartYear,
         end_year: defEndYear,
         min_canopy: defMinCanopy,
+        include_ndvi: defIncludeNdvi,
+        ndvi_before_year: defNdviBefore,
+        ndvi_after_year: defNdviAfter,
+        ndvi_threshold: defNdviThreshold,
+        season_start_month: sStart,
+        season_end_month: sEnd,
       });
       setDeforestResult(res.data);
       if (res.data.combined_tiles) {
@@ -574,6 +650,30 @@ export default function TerrainGuardian() {
         }
       ]
     };
+  } else if (overlayTiles === "firms_hotspots" && firmsResult?.geojson) {
+    mapStyle = {
+      ...MAP_STYLE,
+      sources: {
+        ...MAP_STYLE.sources,
+        "firms-hotspots": { type: "geojson", data: firmsResult.geojson },
+      },
+      layers: [
+        ...MAP_STYLE.layers,
+        {
+          id: "firms-hotspots-heat",
+          type: "circle",
+          source: "firms-hotspots",
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["get", "frp"], 0, 3, 50, 8, 200, 14],
+            "circle-color": ["interpolate", ["linear"], ["get", "brightness"], 300, "#fbbf24", 340, "#f97316", 380, "#ef4444", 420, "#991b1b"],
+            "circle-opacity": 0.7,
+            "circle-stroke-width": 0.5,
+            "circle-stroke-color": "#fff",
+            "circle-stroke-opacity": 0.3,
+          },
+        },
+      ],
+    };
   } else if (overlayTiles) {
     mapStyle = {
       ...MAP_STYLE,
@@ -630,17 +730,6 @@ export default function TerrainGuardian() {
             </p>
           </div>
 
-          {/* Status Pill */}
-          <div className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${hasGeom ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-[#030712]/50 border-white/10'}`}>
-            <div className="relative flex h-3 w-3">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${hasGeom ? 'bg-emerald-400' : 'bg-slate-500'}`}></span>
-              <span className={`relative inline-flex rounded-full h-3 w-3 ${hasGeom ? 'bg-emerald-400' : 'bg-slate-500'}`}></span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold uppercase tracking-wider">{hasGeom ? 'AOI Ready' : 'Awaiting AOI'}</span>
-              <span className="text-[10px] text-slate-400 font-mono">{hasGeom ? 'Ready for GEE analysis' : 'Draw a shape to begin'}</span>
-            </div>
-          </div>
 
           {/* GeoJSON Toggle */}
           <div className="flex flex-col gap-2">
@@ -699,22 +788,30 @@ export default function TerrainGuardian() {
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Season</label>
-                  <select value={lulcSeason} onChange={(e) => setLulcSeason(e.target.value)}
-                    className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-slate-200 font-mono text-sm focus:border-emerald-500/50 focus:outline-none transition-colors">
-                    <option value="annual">Annual</option>
-                    <option value="kharif">Kharif</option>
-                    <option value="rabi">Rabi</option>
-                    <option value="dry">Dry</option>
-                    <option value="wet">Wet</option>
-                  </select>
+                  <CustomSelect
+                    value={lulcSeason}
+                    onChange={setLulcSeason}
+                    accentColor="#00d4aa"
+                    options={[
+                      { value: "annual", label: "Annual", icon: <Calendar className="w-3 h-3" /> },
+                      { value: "kharif", label: "Kharif", icon: <CloudRain className="w-3 h-3" /> },
+                      { value: "rabi", label: "Rabi", icon: <Sprout className="w-3 h-3" /> },
+                      { value: "dry", label: "Dry", icon: <Sun className="w-3 h-3" /> },
+                      { value: "wet", label: "Wet", icon: <Waves className="w-3 h-3" /> },
+                    ]}
+                  />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2 mt-1">
                   <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Model Engine</label>
-                  <select value={lulcModel} onChange={(e) => setLulcModel(e.target.value)}
-                    className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sky-300 font-mono text-xs focus:border-emerald-500/50 focus:outline-none transition-colors w-full">
-                    <option value="dynamic_world">☁️ Google Dynamic World (Fast Cloud API)</option>
-                    <option value="custom_1dcnn">💻 Custom 1D-CNN (Local TensorFlow Processing)</option>
-                  </select>
+                  <CustomSelect
+                    value={lulcModel}
+                    onChange={setLulcModel}
+                    accentColor="#00d4aa"
+                    options={[
+                      { value: "dynamic_world", label: "Google Dynamic World (Fast Cloud API)", icon: <Cloud className="w-3 h-3" />, description: "10m near real-time classification" },
+                      { value: "custom_1dcnn", label: "Custom 1D-CNN (Local TensorFlow)", icon: <Cpu className="w-3 h-3" />, description: "Neural network on local device" },
+                    ]}
+                  />
                 </div>
               </div>
               
@@ -750,18 +847,23 @@ export default function TerrainGuardian() {
                   <p className="text-[10px] text-slate-500 leading-relaxed -mt-2">
                     Draw a polygon, select its true class, and retrain the 1D-CNN locally.
                   </p>
-                  <select value={hitlClass} onChange={(e) => setHitlClass(e.target.value)} disabled={isTraining}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500/50 appearance-none">
-                    <option value="1">Water</option>
-                    <option value="2">Trees</option>
-                    <option value="3">Grass</option>
-                    <option value="4">Flooded Vegetation</option>
-                    <option value="5">Crops</option>
-                    <option value="6">Shrub & Scrub</option>
-                    <option value="7">Built Area</option>
-                    <option value="8">Bare Ground</option>
-                    <option value="9">Snow & Ice</option>
-                  </select>
+                  <CustomSelect
+                    value={hitlClass}
+                    onChange={setHitlClass}
+                    disabled={isTraining}
+                    accentColor="#00d4aa"
+                    options={[
+                      { value: "1", label: "Water", icon: <Droplets className="w-3 h-3" /> },
+                      { value: "2", label: "Trees", icon: <Trees className="w-3 h-3" /> },
+                      { value: "3", label: "Grass", icon: <Sprout className="w-3 h-3" /> },
+                      { value: "4", label: "Flooded Vegetation", icon: <Waves className="w-3 h-3" /> },
+                      { value: "5", label: "Crops", icon: <Wheat className="w-3 h-3" /> },
+                      { value: "6", label: "Shrub & Scrub", icon: <Leaf className="w-3 h-3" /> },
+                      { value: "7", label: "Built Area", icon: <Building2 className="w-3 h-3" /> },
+                      { value: "8", label: "Bare Ground", icon: <Mountain className="w-3 h-3" /> },
+                      { value: "9", label: "Snow & Ice", icon: <Snowflake className="w-3 h-3" /> },
+                    ]}
+                  />
                   <button onClick={runHitlTraining} disabled={isTraining || !hasGeom}
                     className={`w-full py-2.5 rounded-xl text-xs font-medium tracking-wide transition-all ${
                       isTraining || !hasGeom
@@ -847,11 +949,11 @@ export default function TerrainGuardian() {
                         <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Map Layers</span>
                         <div className="grid grid-cols-3 gap-1.5">
                           {[
-                            { key: 'lulc_tiles', label: 'LULC', emoji: '🗺️' },
-                            { key: 'rgb_tiles', label: 'RGB', emoji: '🛰' },
-                            { key: 'ndvi_tiles', label: 'NDVI', emoji: '🌿' },
-                            { key: 'ndbi_tiles', label: 'NDBI', emoji: '🏗' },
-                            { key: 'mndwi_tiles', label: 'MNDWI', emoji: '💧' },
+                            { key: 'lulc_tiles', label: 'LULC', Icon: MapPinned },
+                            { key: 'rgb_tiles', label: 'RGB', Icon: Satellite },
+                            { key: 'ndvi_tiles', label: 'NDVI', Icon: Leaf },
+                            { key: 'ndbi_tiles', label: 'NDBI', Icon: Factory },
+                            { key: 'mndwi_tiles', label: 'MNDWI', Icon: Droplets },
                           ].map((l) => (
                             <button key={l.key} onClick={() => switchLayer(lulcResult[l.key], l.label)}
                               className={`text-[10px] px-2 py-2 rounded-lg border font-bold tracking-wider transition-all ${
@@ -860,7 +962,7 @@ export default function TerrainGuardian() {
                                   : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
                               }`}
                             >
-                              {l.emoji} {l.label}
+                              <l.Icon className="w-3 h-3" /> {l.label}
                             </button>
                           ))}
                         </div>
@@ -868,9 +970,9 @@ export default function TerrainGuardian() {
                         <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mt-2">Probability Heatmaps</span>
                         <div className="grid grid-cols-3 gap-1.5">
                           {[
-                            { key: 'built_prob_tiles', label: 'Built Area', emoji: '🏘' },
-                            { key: 'trees_prob_tiles', label: 'Trees', emoji: '🌳' },
-                            { key: 'crops_prob_tiles', label: 'Crops', emoji: '🌾' },
+                            { key: 'built_prob_tiles', label: 'Built Area', Icon: Home },
+                            { key: 'trees_prob_tiles', label: 'Trees', Icon: Trees },
+                            { key: 'crops_prob_tiles', label: 'Crops', Icon: Wheat },
                           ].map((l) => (
                             <button key={l.key} onClick={() => switchLayer(lulcResult[l.key], l.label)}
                               className={`text-[10px] px-2 py-2 rounded-lg border font-bold tracking-wider transition-all ${
@@ -879,12 +981,20 @@ export default function TerrainGuardian() {
                                   : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
                               }`}
                             >
-                              {l.emoji} {l.label}
+                              <l.Icon className="w-3 h-3" /> {l.label}
                             </button>
                           ))}
                         </div>
                       </div>
                     )}
+
+                    {/* Generate Report Button */}
+                    <button
+                      onClick={() => setShowLulcReport(true)}
+                      className="w-full py-3 rounded-xl text-xs font-semibold tracking-wide bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/20 text-emerald-300 hover:from-emerald-500/30 hover:to-cyan-500/30 hover:text-white transition-all flex items-center justify-center gap-2 mt-2"
+                    >
+                      <BarChart3 className="w-3.5 h-3.5" /> Generate Report
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -895,45 +1005,178 @@ export default function TerrainGuardian() {
           {activeTab === "fire" && (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col gap-5">
               <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col gap-4">
-                <h3 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase">Analysis Parameters</h3>
-                
-                {/* Pre-Fire Dates */}
-                <div className="space-y-2">
-                  <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Pre-Fire Period</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input type="date" value={firePreStart} onChange={(e) => setFirePreStart(e.target.value)}
-                      className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
-                    <input type="date" value={firePreEnd} onChange={(e) => setFirePreEnd(e.target.value)}
-                      className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
-                  </div>
-                </div>
-
-                {/* Post-Fire Dates */}
-                <div className="space-y-2">
-                  <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Post-Fire Period</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input type="date" value={firePostStart} onChange={(e) => setFirePostStart(e.target.value)}
-                      className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
-                    <input type="date" value={firePostEnd} onChange={(e) => setFirePostEnd(e.target.value)}
-                      className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
-                  </div>
-                </div>
-
-                <button
-                  onClick={runFire}
-                  disabled={!selectedPolygon || loading}
-                  className="w-full mt-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-medium py-3 rounded-xl shadow-lg shadow-orange-900/20 disabled:opacity-50 flex justify-center items-center gap-2 transition-all"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flame className="w-4 h-4" />}
-                  {loading ? "Analyzing Geometry..." : "Run Burn Severity Analysis"}
-                </button>
+                <h3 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase">Analysis Engine</h3>
+                <CustomSelect
+                  value={fireEngine}
+                  onChange={setFireEngine}
+                  accentColor="#f97316"
+                  options={[
+                    { value: "gee_dnbr", label: "GEE Burn Severity (Sentinel-2 dNBR)", icon: <Satellite className="w-3 h-3" />, description: "Pre/Post fire comparison" },
+                    { value: "firms", label: "NASA FIRMS Hotspots (MODIS + VIIRS)", icon: <Flame className="w-3 h-3" />, description: "Active fire detections" },
+                  ]}
+                />
               </div>
 
+              {/* GEE dNBR Mode */}
+              {fireEngine === "gee_dnbr" && (
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col gap-4">
+                  <h3 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase">dNBR Parameters</h3>
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Pre-Fire Period</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="date" value={firePreStart} onChange={(e) => setFirePreStart(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
+                      <input type="date" value={firePreEnd} onChange={(e) => setFirePreEnd(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Post-Fire Period</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="date" value={firePostStart} onChange={(e) => setFirePostStart(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
+                      <input type="date" value={firePostEnd} onChange={(e) => setFirePostEnd(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
+                    </div>
+                  </div>
+                  <button onClick={runFire} disabled={!selectedPolygon || loading}
+                    className={`relative group overflow-hidden flex items-center justify-center gap-3 w-full py-3.5 rounded-full font-semibold tracking-wide transition-all duration-300 text-sm mt-2 ${
+                      !selectedPolygon || loading
+                        ? 'bg-white/5 text-slate-500 cursor-not-allowed border border-white/10'
+                        : 'bg-orange-500 text-black shadow-[0_0_30px_rgba(249,115,22,0.2)] hover:shadow-[0_0_40px_rgba(249,115,22,0.4)] hover:bg-orange-400'
+                    }`}>
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flame className="w-4 h-4" />}
+                    {loading ? "Analyzing..." : "Run Burn Severity Analysis"}
+                  </button>
+                </div>
+              )}
+
+              {/* FIRMS Mode */}
+              {fireEngine === "firms" && (
+                <div className="bg-white/[0.02] border border-orange-500/10 rounded-xl p-5 flex flex-col gap-4">
+                  <h3 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase">FIRMS Query Parameters</h3>
+                  <p className="text-[10px] text-slate-500 -mt-2">Query NASA FIRMS satellite fire detections (2000–2026, India).</p>
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Date Range</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="date" value={firmsStartDate} onChange={(e) => setFirmsStartDate(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
+                      <input type="date" value={firmsEndDate} onChange={(e) => setFirmsEndDate(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500/50" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Min Confidence: {firmsConfidence}%</label>
+                    <input type="range" min={0} max={90} step={10} value={firmsConfidence}
+                      onChange={(e) => setFirmsConfidence(parseInt(e.target.value))}
+                      className="w-full accent-orange-500" />
+                  </div>
+                  <button onClick={runFireHotspots} disabled={!hasGeom || loading}
+                    className={`relative group overflow-hidden flex items-center justify-center gap-3 w-full py-3.5 rounded-full font-semibold tracking-wide transition-all duration-300 text-sm mt-2 ${
+                      !hasGeom || loading
+                        ? 'bg-white/5 text-slate-500 cursor-not-allowed border border-white/10'
+                        : 'bg-orange-500 text-black shadow-[0_0_30px_rgba(249,115,22,0.2)] hover:shadow-[0_0_40px_rgba(249,115,22,0.4)] hover:bg-orange-400'
+                    }`}>
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flame className="w-4 h-4" />}
+                    {loading ? "Querying FIRMS..." : "Find Fire Hotspots"}
+                  </button>
+
+                  {/* ML Risk Prediction Button */}
+                  <button onClick={runFireRiskPrediction} disabled={!hasGeom || loading}
+                    className={`relative group overflow-hidden flex items-center justify-center gap-3 w-full py-3.5 rounded-full font-semibold tracking-wide transition-all duration-300 text-sm ${
+                      !hasGeom || loading
+                        ? 'bg-white/5 text-slate-500 cursor-not-allowed border border-white/10'
+                        : 'bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.2)] hover:shadow-[0_0_40px_rgba(239,68,68,0.4)]'
+                    }`}>
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>🧠</span>}
+                    {loading ? "Predicting Risk..." : "Predict Fire Risk (ML Model)"}
+                  </button>
+                </div>
+              )}
+
+              {/* FIRMS Result Stats */}
               <AnimatePresence>
-                {fireResult && (
+                {firmsResult && firmsResult.total_points > 0 && fireEngine === "firms" && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.04] backdrop-blur-sm border border-orange-500/[0.12] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <span className="text-xs font-semibold text-white/80">Fire Detections Found</span>
+                      <span className="font-mono text-sm font-bold text-orange-400">{firmsResult.total_points.toLocaleString()}</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* ML Fire Risk Prediction Result */}
+              <AnimatePresence>
+                {fireRiskResult && fireEngine === "firms" && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="bg-white/[0.02] border border-red-500/10 rounded-xl p-5 flex flex-col gap-4">
+                    <h3 className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase flex items-center gap-2">
+                      <span>🧠</span> ML Fire Risk Prediction
+                    </h3>
+
+                    {/* Risk Distribution */}
+                    {fireRiskResult.risk_summary && (
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-red-500/[0.08] border border-red-500/20 rounded-lg p-3 text-center">
+                          <div className="text-lg font-bold font-mono text-red-400">{fireRiskResult.risk_summary.high_risk_cells}</div>
+                          <div className="text-[9px] text-red-300/70 uppercase tracking-wider font-bold">High Risk</div>
+                        </div>
+                        <div className="bg-yellow-500/[0.08] border border-yellow-500/20 rounded-lg p-3 text-center">
+                          <div className="text-lg font-bold font-mono text-yellow-400">{fireRiskResult.risk_summary.medium_risk_cells}</div>
+                          <div className="text-[9px] text-yellow-300/70 uppercase tracking-wider font-bold">Medium</div>
+                        </div>
+                        <div className="bg-green-500/[0.08] border border-green-500/20 rounded-lg p-3 text-center">
+                          <div className="text-lg font-bold font-mono text-green-400">{fireRiskResult.risk_summary.low_risk_cells}</div>
+                          <div className="text-[9px] text-green-300/70 uppercase tracking-wider font-bold">Low Risk</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Model Metrics */}
+                    {fireRiskResult.model_metrics && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Model R² Score</span>
+                          <span className="font-mono font-bold text-emerald-400">{fireRiskResult.model_metrics.r2_score}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Grid Resolution</span>
+                          <span className="font-mono text-slate-300">{fireRiskResult.grid_cell_size_km} km</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Feature Importances */}
+                    {fireRiskResult.model_metrics?.feature_importances && (
+                      <div className="space-y-1.5">
+                        <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">Top Features</div>
+                        {Object.entries(fireRiskResult.model_metrics.feature_importances)
+                          .slice(0, 5)
+                          .map(([name, imp]: [string, any]) => (
+                            <div key={name} className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[10px] text-slate-300">{name.replace(/_/g, ' ')}</span>
+                                  <span className="text-[10px] font-mono text-slate-400">{(imp * 100).toFixed(1)}%</span>
+                                </div>
+                                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                  <div className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full"
+                                    style={{ width: `${Math.min(imp * 300, 100)}%` }} />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* dNBR Results */}
+              <AnimatePresence>
+                {fireResult && fireEngine === "gee_dnbr" && (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="flex flex-col gap-4 overflow-visible">
-                    
-                    {/* Map Layers */}
                     <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                       <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-4 uppercase">Data Layers</h3>
                       <div className="flex flex-col gap-2">
@@ -948,26 +1191,19 @@ export default function TerrainGuardian() {
                               overlayTiles === layer.id
                                 ? `bg-white/10 ${layer.color} ${layer.text} shadow-[0_0_15px_rgba(255,255,255,0.05)]`
                                 : 'bg-black/20 border-white/5 text-slate-400 hover:bg-white/5'
-                            }`}
-                          >
+                            }`}>
                             <Layers className="w-4 h-4" />
                             <span className="flex-1 text-left font-medium">{layer.name}</span>
                           </button>
                         ))}
                       </div>
                     </div>
-
-                    {/* Stats & Classes */}
                     <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 mt-2">
                       <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-4 uppercase">Severity Statistics</h3>
-                      
-                      {/* Total area stat */}
                       <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/20 mb-4">
                         <span className="text-xs font-semibold text-red-200">Total Burned Area</span>
                         <span className="font-mono text-sm font-bold text-red-400">{fireResult.stats.total_burned_ha} <span className="text-xs text-red-500/70">ha</span></span>
                       </div>
-
-                      {/* Class breakdown */}
                       <div className="space-y-3">
                         {Object.entries(fireResult.severity_classes).map(([key, cls]: [string, any]) => {
                           const area = fireResult.stats[`${key}_severity_ha`] || 0;
@@ -987,6 +1223,14 @@ export default function TerrainGuardian() {
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* Generate Report Button */}
+              {(fireResult || (firmsResult && firmsResult.total_points > 0) || fireRiskResult) && (
+                <button onClick={() => setShowFireReport(true)}
+                  className="w-full py-3.5 rounded-full text-sm font-semibold tracking-wide bg-orange-500 text-black shadow-[0_0_30px_rgba(249,115,22,0.2)] hover:shadow-[0_0_40px_rgba(249,115,22,0.4)] hover:bg-orange-400 transition-all flex items-center justify-center gap-2">
+                  <BarChart3 className="w-4 h-4" /> Generate Fire Report
+                </button>
+              )}
             </motion.div>
           )}
 
@@ -1100,14 +1344,15 @@ export default function TerrainGuardian() {
                 
                 <div className="space-y-2">
                   <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Analysis Engine</label>
-                  <select
+                  <CustomSelect
                     value={landslideEngine}
-                    onChange={(e) => setLandslideEngine(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500/50 appearance-none"
-                  >
-                    <option value="gee">Heuristic / GEE (Random Forest)</option>
-                    <option value="deep_learning">Landslide4Sense U-Net (Deep Learning)</option>
-                  </select>
+                    onChange={setLandslideEngine}
+                    accentColor="#ef4444"
+                    options={[
+                      { value: "gee", label: "Heuristic / GEE (Random Forest)", icon: <ScanSearch className="w-3 h-3" />, description: "Slope, aspect & drainage analysis" },
+                      { value: "deep_learning", label: "Landslide4Sense U-Net (Deep Learning)", icon: <BrainCircuit className="w-3 h-3" />, description: "6-channel feature segmentation" },
+                    ]}
+                  />
                 </div>
 
                 <p className="text-xs text-slate-400 leading-relaxed">
@@ -1133,11 +1378,16 @@ export default function TerrainGuardian() {
                     <p className="text-[10px] text-slate-500 leading-relaxed -mt-2">
                       Draw a polygon, select its true class, and submit it to instantly fine-tune the custom Deep Learning U-Net.
                     </p>
-                    <select value={landslideTrainClass} onChange={(e) => setLandslideTrainClass(e.target.value)} disabled={isLandslideTraining}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500/50 appearance-none">
-                      <option value="1">Landslide / Susceptible Area</option>
-                      <option value="0">Safe / Non-Landslide Area</option>
-                    </select>
+                    <CustomSelect
+                      value={landslideTrainClass}
+                      onChange={setLandslideTrainClass}
+                      disabled={isLandslideTraining}
+                      accentColor="#ef4444"
+                      options={[
+                        { value: "1", label: "Landslide / Susceptible Area", icon: <ShieldAlert className="w-3 h-3" /> },
+                        { value: "0", label: "Safe / Non-Landslide Area", icon: <ShieldCheck className="w-3 h-3" /> },
+                      ]}
+                    />
                     <button onClick={runLandslideTraining} disabled={isLandslideTraining || !hasGeom}
                       className={`w-full py-2.5 rounded-xl text-xs font-medium tracking-wide transition-all ${
                         isLandslideTraining || !hasGeom
@@ -1256,12 +1506,12 @@ export default function TerrainGuardian() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Start Year (2001+)</label>
-                    <input type="number" min="2001" max="2023" value={defStartYear} onChange={(e) => setDefStartYear(parseInt(e.target.value))}
+                    <input type="number" min="2001" max="2024" value={defStartYear} onChange={(e) => setDefStartYear(parseInt(e.target.value))}
                       className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-green-500/50" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">End Year (≤2023)</label>
-                    <input type="number" min="2001" max="2023" value={defEndYear} onChange={(e) => setDefEndYear(parseInt(e.target.value))}
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">End Year (≤2024)</label>
+                    <input type="number" min="2001" max="2024" value={defEndYear} onChange={(e) => setDefEndYear(parseInt(e.target.value))}
                       className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-green-500/50" />
                   </div>
                 </div>
@@ -1274,6 +1524,63 @@ export default function TerrainGuardian() {
                   <input type="range" min="0" max="100" step="5" value={defMinCanopy} onChange={(e) => setDefMinCanopy(parseInt(e.target.value))}
                     className="w-full accent-green-500" />
                 </div>
+
+                {/* NDVI Toggle */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                  <div>
+                    <span className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Sentinel-2 NDVI Analysis</span>
+                    <p className="text-[9px] text-slate-500 mt-0.5">10m resolution temporal change detection</p>
+                  </div>
+                  <button onClick={() => setDefIncludeNdvi(!defIncludeNdvi)}
+                    className={`w-10 h-5 rounded-full transition-all duration-300 ${defIncludeNdvi ? 'bg-green-500' : 'bg-white/10'}`}>
+                    <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 ${defIncludeNdvi ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {defIncludeNdvi && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex flex-col gap-3 overflow-hidden">
+                      <div className="text-[10px] text-yellow-500/80 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2.5 font-mono">
+                        ⚠️ Adds ~60s processing. Hansen is limited to 2024, but NDVI uses live Sentinel-2 data — supports up to {new Date().getFullYear()}.
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Before Year</label>
+                          <input type="number" min="2017" max={new Date().getFullYear()} value={defNdviBefore} onChange={(e) => setDefNdviBefore(parseInt(e.target.value))}
+                            className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500/50" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">After Year</label>
+                          <input type="number" min="2017" max={new Date().getFullYear()} value={defNdviAfter} onChange={(e) => setDefNdviAfter(parseInt(e.target.value))}
+                            className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500/50" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">NDVI Tree Threshold</label>
+                          <span className="text-[10px] font-mono text-green-400">{defNdviThreshold}</span>
+                        </div>
+                        <input type="range" min="0.2" max="0.7" step="0.05" value={defNdviThreshold} onChange={(e) => setDefNdviThreshold(parseFloat(e.target.value))}
+                          className="w-full accent-green-500" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Season Filter</label>
+                        <CustomSelect
+                          value={defSeason}
+                          onChange={setDefSeason}
+                          accentColor="#22c55e"
+                          options={[
+                            { value: "annual", label: "Annual (Jan–Dec)", icon: <Calendar className="w-3 h-3" /> },
+                            { value: "kharif", label: "Kharif (Jun–Oct)", icon: <CloudRain className="w-3 h-3" /> },
+                            { value: "rabi", label: "Rabi (Nov–Mar)", icon: <Sprout className="w-3 h-3" /> },
+                            { value: "summer", label: "Summer (Mar–May)", icon: <Sun className="w-3 h-3" /> },
+                            { value: "winter", label: "Winter (Dec–Feb)", icon: <Snowflake className="w-3 h-3" /> },
+                          ]}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <button
                   onClick={runDeforestation}
@@ -1291,12 +1598,13 @@ export default function TerrainGuardian() {
                     
                     {/* Layer controls */}
                     <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
-                      <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-4 uppercase">Data Layers</h3>
+                      <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-4 uppercase">Hansen Layers</h3>
                       <div className="flex flex-col gap-2">
                         {[
-                          { id: deforestResult.combined_tiles, name: "Forest Loss Map (Combined)", color: "border-green-500", text: "text-green-400" },
+                          { id: deforestResult.combined_tiles, name: "Forest Loss + Gain (Combined)", color: "border-green-500", text: "text-green-400" },
                           { id: deforestResult.forest_loss_tiles, name: "Loss Extent Only", color: "border-red-500", text: "text-red-400" },
                           { id: deforestResult.base_forest_tiles, name: "Base Forest Extent (2000)", color: "border-emerald-700", text: "text-emerald-500" },
+                          { id: deforestResult.gain_tiles, name: "Forest Gain", color: "border-cyan-500", text: "text-cyan-400" },
                         ].map((layer, i) => (
                           <button key={i} onClick={() => switchLayer(layer.id, layer.name)}
                             disabled={!layer.id}
@@ -1311,20 +1619,50 @@ export default function TerrainGuardian() {
                           </button>
                         ))}
                       </div>
+
+                      {/* NDVI Layers (only if NDVI analysis was run) */}
+                      {deforestResult.ndvi && (
+                        <>
+                          <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-3 mt-5 uppercase">Sentinel-2 NDVI Layers</h3>
+                          <div className="flex flex-col gap-2">
+                            {[
+                              { id: deforestResult.ndvi.ndvi_before_tiles, name: `NDVI Before (${deforestResult.ndvi.before_year})`, color: "border-green-500", text: "text-green-400" },
+                              { id: deforestResult.ndvi.ndvi_after_tiles, name: `NDVI After (${deforestResult.ndvi.after_year})`, color: "border-yellow-500", text: "text-yellow-400" },
+                              { id: deforestResult.ndvi.ndvi_delta_tiles, name: "NDVI Change (Delta)", color: "border-orange-500", text: "text-orange-400" },
+                            ].map((layer, i) => (
+                              <button key={`ndvi-${i}`} onClick={() => switchLayer(layer.id, layer.name)}
+                                disabled={!layer.id}
+                                className={`flex items-center gap-3 p-3 rounded-lg border text-xs transition-all ${!layer.id ? 'opacity-50 cursor-not-allowed' : ''} ${
+                                  overlayTiles === layer.id
+                                    ? `bg-white/10 ${layer.color} ${layer.text} shadow-[0_0_15px_rgba(255,255,255,0.05)]`
+                                    : 'bg-black/20 border-white/5 text-slate-400 hover:bg-white/5'
+                                }`}
+                              >
+                                <Layers className="w-4 h-4" />
+                                <span className="flex-1 text-left font-medium">{layer.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {/* Stats */}
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 mt-2">
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                       <h3 className="text-[11px] font-mono tracking-widest text-slate-400 mb-4 uppercase">Deforestation Statistics</h3>
                       
-                      <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="grid grid-cols-3 gap-2 mb-4">
                          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                           <div className="text-[10px] uppercase tracking-wider text-red-500/70 mb-1">Loss Area</div>
-                           <div className="text-lg font-mono font-bold text-red-400 text-center">{deforestResult.stats?.loss_area_ha} <span className="text-[10px] text-red-500/50">ha</span></div>
+                           <div className="text-[9px] uppercase tracking-wider text-red-500/70 mb-1">Loss</div>
+                           <div className="text-base font-mono font-bold text-red-400 text-center">{deforestResult.stats?.loss_area_ha} <span className="text-[9px] text-red-500/50">ha</span></div>
                          </div>
                          <div className="bg-black/20 border border-white/5 rounded-lg p-3">
-                           <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Base Forest</div>
-                           <div className="text-lg font-mono text-slate-300 text-center">{deforestResult.stats?.base_forest_area_ha} <span className="text-[10px] text-slate-500">ha</span></div>
+                           <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-1">Base</div>
+                           <div className="text-base font-mono text-slate-300 text-center">{deforestResult.stats?.base_forest_area_ha} <span className="text-[9px] text-slate-500">ha</span></div>
+                         </div>
+                         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                           <div className="text-[9px] uppercase tracking-wider text-emerald-500/70 mb-1">Gain</div>
+                           <div className="text-base font-mono font-bold text-emerald-400 text-center">{deforestResult.stats?.gain_area_ha} <span className="text-[9px] text-emerald-500/50">ha</span></div>
                          </div>
                       </div>
 
@@ -1337,11 +1675,40 @@ export default function TerrainGuardian() {
                           <span className="font-mono text-xs font-bold text-red-400">{deforestResult.stats?.loss_percentage}%</span>
                         </div>
                       </div>
+
+                      {deforestResult.stats?.peak_loss_year && (
+                        <div className="flex items-center justify-between p-3 mt-2 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
+                          <span className="text-xs text-slate-400">Peak Loss Year</span>
+                          <span className="font-mono text-xs font-bold text-yellow-400">{deforestResult.stats.peak_loss_year} ({deforestResult.stats.avg_annual_loss_ha} ha/yr avg)</span>
+                        </div>
+                      )}
                       
                       <div className="mx-2 mt-4 text-[10px] text-slate-500 text-center">
                         Source: {deforestResult.stats?.source}
                       </div>
                     </div>
+
+                    {/* Generate Report Button */}
+                    <button onClick={() => setShowDeforestReport(true)}
+                      className="w-full py-3.5 rounded-full text-sm font-semibold tracking-wide bg-green-500 text-black shadow-[0_0_30px_rgba(34,197,94,0.2)] hover:shadow-[0_0_40px_rgba(34,197,94,0.4)] hover:bg-green-400 transition-all flex items-center justify-center gap-2">
+                      <BarChart3 className="w-4 h-4" /> Generate Deforestation Report
+                    </button>
+
+                    {/* Clear Cache Button */}
+                    <button onClick={async () => {
+                      try {
+                        const serverUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                        await axios.delete(`${serverUrl}/api/deforestation/cache`);
+                        setDeforestResult(null);
+                        setOverlayTiles(null);
+                        setOverlayName("");
+                        alert("Cache cleared! Next analysis will fetch fresh data from GEE.");
+                      } catch { alert("Failed to clear cache."); }
+                    }}
+                      className="group w-full py-2.5 rounded-xl text-[11px] font-semibold tracking-wider uppercase bg-white/[0.03] border border-white/[0.06] text-slate-500 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all duration-300 flex items-center justify-center gap-2">
+                      <Trash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform duration-300" />
+                      Clear Cached Results
+                    </button>
 
                   </motion.div>
                 )}
@@ -1357,14 +1724,15 @@ export default function TerrainGuardian() {
                 
                 <div className="space-y-2">
                   <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Analysis Engine</label>
-                  <select
+                  <CustomSelect
                     value={buildingEngine}
-                    onChange={(e) => setBuildingEngine(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-purple-500/50 appearance-none"
-                  >
-                    <option value="gee">Google Open Buildings V3</option>
-                    <option value="deep_learning">Custom ResU-Net (Deep Learning)</option>
-                  </select>
+                    onChange={setBuildingEngine}
+                    accentColor="#a855f7"
+                    options={[
+                      { value: "gee", label: "Google Open Buildings V3", icon: <Globe2 className="w-3 h-3" />, description: "Pre-computed building footprints" },
+                      { value: "deep_learning", label: "Custom ResU-Net (Deep Learning)", icon: <BrainCircuit className="w-3 h-3" />, description: "Local RGB segmentation model" },
+                    ]}
+                  />
                 </div>
 
                 <p className="text-xs text-slate-400 leading-relaxed">
@@ -1390,11 +1758,16 @@ export default function TerrainGuardian() {
                     <p className="text-[10px] text-slate-500 leading-relaxed -mt-2">
                       Draw a polygon, select its true class, and submit it to instantly fine-tune the Custom U-Net.
                     </p>
-                    <select value={buildingTrainClass} onChange={(e) => setBuildingTrainClass(e.target.value)} disabled={isBuildingTraining}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-purple-500/50 appearance-none">
-                      <option value="1">Building / Urban Area</option>
-                      <option value="0">Empty / Bare Land</option>
-                    </select>
+                    <CustomSelect
+                      value={buildingTrainClass}
+                      onChange={setBuildingTrainClass}
+                      disabled={isBuildingTraining}
+                      accentColor="#a855f7"
+                      options={[
+                        { value: "1", label: "Building / Urban Area", icon: <Building2 className="w-3 h-3" /> },
+                        { value: "0", label: "Empty / Bare Land", icon: <Mountain className="w-3 h-3" /> },
+                      ]}
+                    />
                     <button onClick={runBuildingTraining} disabled={isBuildingTraining || !hasGeom}
                       className={`w-full py-2.5 rounded-xl text-xs font-medium tracking-wide transition-all ${
                         isBuildingTraining || !hasGeom
@@ -1571,6 +1944,46 @@ export default function TerrainGuardian() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* LULC Report Modal */}
+      <LulcReport
+        isOpen={showLulcReport}
+        onClose={() => setShowLulcReport(false)}
+        lulcResult={lulcResult}
+        lulcYear={lulcYear}
+        lulcSeason={lulcSeason}
+        lulcModel={lulcModel}
+        getGeometry={getGeometry}
+      />
+
+      {/* Fire Report Modal */}
+      <FireReport
+        isOpen={showFireReport}
+        onClose={() => setShowFireReport(false)}
+        fireResult={fireResult}
+        fireRiskResult={fireRiskResult}
+        getGeometry={getGeometry}
+      />
+
+      {/* Deforestation Report Modal */}
+      <DeforestationReport
+        isOpen={showDeforestReport}
+        onClose={() => setShowDeforestReport(false)}
+        deforestResult={deforestResult}
+        getGeometry={getGeometry}
+      />
     </div>
+  );
+}
+
+export default function TerrainGuardian() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen w-full bg-[#030712] flex items-center justify-center">
+        <div className="text-white/50 text-sm tracking-widest font-mono animate-pulse">LOADING MODULE...</div>
+      </div>
+    }>
+      <TerrainGuardianInner />
+    </Suspense>
   );
 }

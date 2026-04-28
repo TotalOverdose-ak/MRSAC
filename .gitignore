@@ -30,3 +30,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Large dataset files (exceed GitHub 100MB limit)
+Forest Fire CSV NASA FIRMS/
+*.tif
+cache/

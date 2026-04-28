@@ -13,8 +13,16 @@ import {
 const EarthGlobe = dynamic(() => import("@/components/EarthGlobe"), { ssr: false });
 const SolarSystem3D = dynamic(() => import("@/components/SolarSystem3D"), { ssr: false });
 
-// ── Module-level flag: survives client-side nav, resets on reload ──
-let _hasSeenIntro = false;
+// ── Persist intro state across page navigations via sessionStorage ──
+function hasSeenIntro(): boolean {
+  if (typeof window === 'undefined') return false;
+  return sessionStorage.getItem('ew_intro_seen') === '1';
+}
+function markIntroSeen() {
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('ew_intro_seen', '1');
+  }
+}
 
 // ── Feature definitions ──────────────────────────────────────
 const FEATURES = [
@@ -66,7 +74,7 @@ type Phase = "solar" | "zooming" | "menu";
 
 export default function LaunchPage() {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>(_hasSeenIntro ? "menu" : "solar");
+  const [phase, setPhase] = useState<Phase>("solar");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [rotateSpeed, setRotateSpeed] = useState(0);
@@ -80,21 +88,24 @@ export default function LaunchPage() {
     return () => clearTimeout(timer);
   }, [hoveredId]);
 
-  // Auto-advance solar → zooming (only on first visit)
+  // On mount: skip intro if already seen, otherwise auto-advance
   useEffect(() => {
-    if (_hasSeenIntro) return;
+    if (hasSeenIntro()) {
+      setPhase("menu");
+      return;
+    }
     const t1 = setTimeout(() => setPhase("zooming"), 4000);
     return () => clearTimeout(t1);
   }, []);
 
   const handleZoomComplete = () => {
     setPhase("menu");
-    _hasSeenIntro = true;
+    markIntroSeen();
   };
 
   const skipToMenu = () => {
     setPhase("menu");
-    _hasSeenIntro = true;
+    markIntroSeen();
   };
 
   return (

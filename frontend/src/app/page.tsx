@@ -19,9 +19,9 @@ export default function Home() {
   const scale = useTransform(scrollYProgress, [0, 0.15], [1, 0.9]);
 
   // CRAZY GLOBE PARALLAX: Bottom Center -> Right Center
-  const globeY = useTransform(scrollYProgress, [0, 0.2, 1], ['45vh', '15vh', '15vh']);
-  const globeX = useTransform(scrollYProgress, [0, 0.2, 1], ['0vw', '35vw', '35vw']);
-  const globeScale = useTransform(scrollYProgress, [0, 0.2, 1], [1.0, 0.75, 0.75]);
+  const globeY = useTransform(scrollYProgress, [0, 0.2, 1], ['35vh', '10vh', '10vh']);
+  const globeX = useTransform(scrollYProgress, [0, 0.2, 1], ['0vw', '30vw', '30vw']);
+  const globeScale = useTransform(scrollYProgress, [0, 0.2, 1], [1.0, 0.8, 0.8]);
   const globeOpacity = useTransform(scrollYProgress, [0, 0.2, 1], [1, 1, 0.9]);
 
   const scrollToSection = (id: string) => {
@@ -48,8 +48,8 @@ export default function Home() {
       <motion.div 
         className="fixed inset-0 z-0 flex items-center justify-center mix-blend-screen pointer-events-auto"
         style={{ y: globeY, x: globeX, scale: globeScale, opacity: globeOpacity }}
-        initial={{ opacity: 0, scale: 0.8, y: '50vh' }}
-        animate={{ opacity: 1, scale: 1, y: '45vh' }}
+        initial={{ opacity: 0, scale: 0.8, y: '45vh' }}
+        animate={{ opacity: 1, scale: 1, y: '35vh' }}
         transition={{ duration: 2.5, ease: "easeOut" }}
       >
         <EarthGlobeHome />
@@ -112,23 +112,12 @@ export default function Home() {
 
         <motion.div style={{ opacity, scale }} className="relative z-20 flex flex-col items-center pointer-events-auto mt-[-10vh]">
           
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.2 }}
-            className="flex items-center gap-3 mb-8"
-          >
-            <div className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-            <span className="text-[11px] font-bold tracking-widest uppercase text-sky-200">
-              Live Satellite Uplink Active
-            </span>
-          </motion.div>
-          
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.2, delay: 0.4 }}
-            className="text-[15vw] md:text-[14rem] leading-[0.85] font-serif tracking-tighter text-white select-none"
+            className="text-[14vw] md:text-[13rem] leading-[0.85] font-serif font-normal text-white select-none"
+            style={{ letterSpacing: "-0.04em" }}
           >
             EARTH
           </motion.h1>
