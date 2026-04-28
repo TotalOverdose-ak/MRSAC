@@ -447,29 +447,41 @@ def get_snow_persistence(geojson_geom, year=2024):
     """
     Compute snow persistence using MODIS MOD10A1 daily snow cover.
     Returns: number of snow-covered days per pixel (as map tiles) + summary stats.
-    MODIS NDSI_Snow_Cover band: 0-100 = fractional snow cover.
+    MODIS CGF_NDSI_Snow_Cover band: 0-100 = cloud-gap-filled fractional snow cover.
+    Uses MOD10A1F (Cloud-Gap-Filled) for cloud-free daily coverage.
     """
-    print(f"[SNOW] → Computing snow persistence (MODIS daily) for {year}...")
+    print(f"[SNOW] → Computing snow persistence (MODIS CGF daily) for {year}...")
     init_gee()
     region = ee.Geometry(geojson_geom)
 
-    # MODIS MOD10A1 daily snow cover
-    modis = (ee.ImageCollection('MODIS/061/MOD10A1')
+    # MODIS MOD10A1F — Cloud-Gap-Filled daily snow cover
+    modis = (ee.ImageCollection('MODIS/061/MOD10A1F')
              .filterBounds(region)
-             .filterDate(f'{year}-01-01', f'{year}-12-31')
-             .select('NDSI_Snow_Cover'))
+             .filterDate(f'{year}-01-01', f'{year}-12-31'))
 
     image_count = safe_get_info(modis.size(), 0)
-    print(f"[SNOW]   Found {image_count} MODIS daily images")
+    print(f"[SNOW]   Found {image_count} MODIS CGF daily images")
 
     if image_count == 0:
         return {'snow_days_tiles': None, 'stats': {'mean_snow_days': 0, 'max_snow_days': 0, 'total_images': 0}}
 
-    # Create binary snow mask for each image (NDSI_Snow_Cover > 10%)
+    # Cloud persistence quality metric — how many days were gap-filled
+    cloud_pers = modis.select('Cloud_Persistence')
+    mean_cloud_pers = safe_get_info(
+        cloud_pers.mean().reduceRegion(
+            reducer=ee.Reducer.mean(), geometry=region,
+            scale=500, maxPixels=1e9
+        ).get('Cloud_Persistence'), 0
+    )
+
+    # CGF snow cover band
+    cgf_snow = modis.select('CGF_NDSI_Snow_Cover')
+
+    # Create binary snow mask for each image (CGF_NDSI_Snow_Cover > 10%)
     def _to_snow_binary(img):
         return img.gt(10).rename('snow_day').copyProperties(img, ['system:time_start'])
 
-    snow_binary = modis.map(_to_snow_binary)
+    snow_binary = cgf_snow.map(_to_snow_binary)
 
     # Sum all binary masks = number of snow-covered days per pixel
     snow_days = snow_binary.sum().clip(region).rename('snow_days')
@@ -487,6 +499,7 @@ def get_snow_persistence(geojson_geom, year=2024):
     p90_days = safe_get_info(days_stats.get('snow_days_p90'), 0)
 
     print(f"[SNOW]   Mean snow days: {mean_days:.0f}, Max: {max_days:.0f}")
+    print(f"[SNOW]   Mean cloud persistence: {mean_cloud_pers:.1f} days")
 
     # Map tiles — snow persistence heatmap
     snow_days_vis = snow_days.visualize(
@@ -496,7 +509,7 @@ def get_snow_persistence(geojson_geom, year=2024):
                  '#f472b6', '#fb7185', '#f43f5e', '#ffffff'])
     snow_days_tiles = get_map_tiles(snow_days_vis)
 
-    print(f"[SNOW] ✓ Snow persistence computed")
+    print(f"[SNOW] ✓ Snow persistence computed (MOD10A1F CGF)")
     return {
         'snow_days_tiles': snow_days_tiles,
         'stats': {
@@ -505,6 +518,112 @@ def get_snow_persistence(geojson_geom, year=2024):
             'median_snow_days': round(median_days),
             'p90_snow_days': round(p90_days),
             'total_images': image_count,
+            'mean_cloud_persistence_days': round(mean_cloud_pers, 1),
             'year': year,
+            'source': 'MOD10A1F (Cloud-Gap-Filled)',
         }
     }
+
+
+def get_snow_surface_temperature(geojson_geom, year=2024):
+    """
+    Compute Land/Ice Surface Temperature over snow-covered areas
+    using MODIS MOD11A1 (1km daily LST).
+    Returns: mean/min/max LST (°C) over snow, LST tile layer, per-zone LST.
+    """
+    print(f"[SNOW] → Computing surface temperature (MODIS LST) for {year}...")
+    init_gee()
+    region = ee.Geometry(geojson_geom)
+
+    # Get snow mask from Landsat for the same year
+    composite = _get_landsat89_composite(region, year)
+    ndsi = composite.normalizedDifference(['B3', 'B6']).rename('NDSI')
+    snow_mask = ndsi.gt(NDSI_THRESHOLD)
+
+    # MODIS MOD11A1 — Land Surface Temperature (1km daily)
+    lst_col = (ee.ImageCollection('MODIS/061/MOD11A1')
+               .filterBounds(region)
+               .filterDate(f'{year}-01-01', f'{year}-12-31')
+               .select('LST_Day_1km'))
+
+    image_count = safe_get_info(lst_col.size(), 0)
+    print(f"[SNOW]   Found {image_count} MODIS LST images")
+
+    if image_count == 0:
+        return {'lst_tiles': None, 'stats': {}}
+
+    # Compute mean annual LST and convert: K * 0.02 - 273.15 = °C
+    lst_mean = lst_col.mean().clip(region)
+    lst_celsius = lst_mean.multiply(0.02).subtract(273.15).rename('LST_C')
+
+    # Mask LST to snow-covered areas only
+    lst_snow = lst_celsius.updateMask(snow_mask)
+
+    # Stats over snow areas
+    lst_stats = lst_snow.reduceRegion(
+        reducer=ee.Reducer.mean().combine(
+            ee.Reducer.minMax(), sharedInputs=True
+        ).combine(ee.Reducer.stdDev(), sharedInputs=True),
+        geometry=region, scale=1000, maxPixels=1e9
+    )
+
+    mean_lst = safe_get_info(lst_stats.get('LST_C_mean'), None)
+    min_lst = safe_get_info(lst_stats.get('LST_C_min'), None)
+    max_lst = safe_get_info(lst_stats.get('LST_C_max'), None)
+    std_lst = safe_get_info(lst_stats.get('LST_C_stdDev'), None)
+
+    if mean_lst is not None:
+        print(f"[SNOW]   Snow surface temp: {mean_lst:.1f}°C (range: {min_lst:.1f} to {max_lst:.1f})")
+    else:
+        print("[SNOW]   ⚠ No LST data available over snow areas")
+
+    # Full-AOI LST stats (not just snow)
+    lst_full_stats = lst_celsius.reduceRegion(
+        reducer=ee.Reducer.mean().combine(ee.Reducer.minMax(), sharedInputs=True),
+        geometry=region, scale=1000, maxPixels=1e9
+    )
+    aoi_mean_lst = safe_get_info(lst_full_stats.get('LST_C_mean'), None)
+    aoi_min_lst = safe_get_info(lst_full_stats.get('LST_C_min'), None)
+    aoi_max_lst = safe_get_info(lst_full_stats.get('LST_C_max'), None)
+
+    # LST per elevation zone
+    dem = ee.Image('USGS/SRTMGL1_003').select('elevation').clip(region)
+    zone_lst = []
+    for low, high, label, color in ELEVATION_ZONES:
+        zone_mask = dem.gte(low).And(dem.lt(high)).And(snow_mask)
+        zone_temp = safe_get_info(
+            lst_celsius.updateMask(zone_mask).reduceRegion(
+                reducer=ee.Reducer.mean(), geometry=region,
+                scale=1000, maxPixels=1e9
+            ).get('LST_C'), None
+        )
+        if zone_temp is not None:
+            zone_lst.append({
+                'label': label, 'color': color,
+                'mean_lst_c': round(zone_temp, 1),
+            })
+
+    # LST tile layer — snow-masked temperature heatmap
+    lst_vis = lst_snow.visualize(
+        min=-35, max=5,
+        palette=['#1e3a5f', '#1e40af', '#3b82f6', '#22d3ee',
+                 '#a5f3fc', '#fef9c3', '#fbbf24', '#f97316', '#ef4444'])
+    lst_tiles = get_map_tiles(lst_vis)
+
+    print(f"[SNOW] ✓ Surface temperature analysis complete")
+    return {
+        'lst_tiles': lst_tiles,
+        'stats': {
+            'snow_mean_lst_c': round(mean_lst, 1) if mean_lst is not None else None,
+            'snow_min_lst_c': round(min_lst, 1) if min_lst is not None else None,
+            'snow_max_lst_c': round(max_lst, 1) if max_lst is not None else None,
+            'snow_std_lst_c': round(std_lst, 1) if std_lst is not None else None,
+            'aoi_mean_lst_c': round(aoi_mean_lst, 1) if aoi_mean_lst is not None else None,
+            'aoi_min_lst_c': round(aoi_min_lst, 1) if aoi_min_lst is not None else None,
+            'aoi_max_lst_c': round(aoi_max_lst, 1) if aoi_max_lst is not None else None,
+            'total_images': image_count,
+            'year': year,
+        },
+        'zone_lst': zone_lst,
+    }
+

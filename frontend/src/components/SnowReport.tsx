@@ -195,6 +195,7 @@ export default function SnowReport({ isOpen, onClose, snowResult }: SnowReportPr
   const trend = snowResult.trend || [];
   const seasonal = snowResult.seasonal || [];
   const persistence = snowResult.persistence || {};
+  const lst = snowResult.lst || {};
 
   return (
     <AnimatePresence>
@@ -431,7 +432,45 @@ export default function SnowReport({ isOpen, onClose, snowResult }: SnowReportPr
                 </div>
               )}
 
-              {/* ── Section 6: Methodology ───────────────────── */}
+              {/* ── Section 5d: Surface Temperature (LST) ──────── */}
+              {lst?.stats?.snow_mean_lst_c != null && (
+                <div className="bg-white/[0.02] border border-orange-500/10 rounded-xl p-5">
+                  <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4">
+                    Snow Surface Temperature — MODIS LST ({lst.stats.year})
+                  </h4>
+                  <div className="grid grid-cols-4 gap-2 mb-3">
+                    {[
+                      { label: 'Mean', value: `${lst.stats.snow_mean_lst_c}°C`, color: 'text-blue-400' },
+                      { label: 'Min', value: `${lst.stats.snow_min_lst_c}°C`, color: 'text-cyan-400' },
+                      { label: 'Max', value: `${lst.stats.snow_max_lst_c}°C`, color: 'text-orange-400' },
+                      { label: 'Std Dev', value: `${lst.stats.snow_std_lst_c}°C`, color: 'text-slate-400' },
+                    ].map(s => (
+                      <div key={s.label} className="bg-white/[0.03] border border-white/5 rounded-lg p-2.5 text-center">
+                        <div className="text-[8px] text-slate-500 uppercase tracking-wider font-bold mb-1">{s.label}</div>
+                        <div className={`text-sm font-bold font-mono ${s.color}`}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Per-zone LST */}
+                  {lst.zone_lst?.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-white/5">
+                      <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-2">Temperature by Elevation Zone</div>
+                      {lst.zone_lst.map((z: any) => (
+                        <div key={z.label} className="flex items-center justify-between py-1 text-[10px]">
+                          <span className="text-slate-400 flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: z.color }} />
+                            {z.label}
+                          </span>
+                          <span className="font-mono text-blue-300">{z.mean_lst_c}°C</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-[9px] text-slate-500 mt-3 italic">⚠ LST accuracy over snow/ice is limited. Values are approximate annual means.</div>
+                </div>
+              )}
+
+              {/* ── Section 7: Methodology ───────────────────── */}
               <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
                 <h4 className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-3">Methodology</h4>
                 <div className="space-y-2.5 text-[10px] text-slate-400 leading-relaxed">
@@ -457,7 +496,10 @@ export default function SnowReport({ isOpen, onClose, snowResult }: SnowReportPr
                     <span className="text-slate-200 font-bold">Seasonal Analysis:</span> Snow coverage computed separately for Winter (Dec–Feb), Spring (Mar–May), Summer (Jun–Aug), and Autumn (Sep–Nov) using per-season Landsat composites.
                   </p>
                   <p>
-                    <span className="text-slate-200 font-bold">Snow Persistence:</span> MODIS MOD10A1 daily snow cover (500m, 2000+) used to count snow-covered days per pixel per year. Provides mean, median, P90, and max snow duration metrics.
+                    <span className="text-slate-200 font-bold">Snow Persistence:</span> MODIS MOD10A1F Cloud-Gap-Filled daily snow cover (500m, 2000+) used to count snow-covered days per pixel per year. CGF algorithm fills cloud-obscured pixels with most recent clear-sky observation.
+                  </p>
+                  <p>
+                    <span className="text-slate-200 font-bold">Surface Temperature:</span> MODIS MOD11A1 Land Surface Temperature (1km daily). Converted from Kelvin using scale factor 0.02, then offset by -273.15 to °C. Masked to snow-covered areas. Note: LST accuracy over high-albedo surfaces is limited.
                   </p>
                 </div>
               </div>
