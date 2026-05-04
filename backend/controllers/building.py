@@ -6,10 +6,6 @@ import json
 import logging
 import asyncio
 
-from backend.services.analysis.gee_utils import init_gee
-from backend.services.analysis.building import analyze_building
-from backend.services.analysis.dl_building import analyze_building_dl, train_building_active_learning, train_building_distill, auto_collect_building
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -29,11 +25,14 @@ async def run_building_analysis(req: BuildingRequest):
         loop = asyncio.get_running_loop()
         
         if req.engine == "deep_learning":
+            from backend.services.analysis.dl_building import analyze_building_dl  # Lazy: TensorFlow
             result = await loop.run_in_executor(
                 None,
                 lambda: analyze_building_dl(geom)
             )
         else:
+            from backend.services.analysis.gee_utils import init_gee  # Lazy: GEE
+            from backend.services.analysis.building import analyze_building
             def _run_gee():
                 init_gee()
                 ee_object = ee.Geometry(geom)
@@ -48,6 +47,7 @@ async def run_building_analysis(req: BuildingRequest):
 @router.post("/api/building/train")
 async def run_building_train(req: TrainRequest):
     try:
+        from backend.services.analysis.dl_building import train_building_active_learning  # Lazy: TensorFlow
         geom = req.geojson
         label = req.class_label
         
@@ -64,6 +64,7 @@ async def run_building_train(req: TrainRequest):
 @router.post("/api/building/distill")
 async def run_building_distill(req: BuildingRequest):
     try:
+        from backend.services.analysis.dl_building import train_building_distill  # Lazy: TensorFlow
         geom = req.geojson
         
         loop = asyncio.get_running_loop()
@@ -79,6 +80,7 @@ async def run_building_distill(req: BuildingRequest):
 @router.post("/api/building/autocollect")
 async def run_building_autocollect():
     try:
+        from backend.services.analysis.dl_building import auto_collect_building  # Lazy: TensorFlow
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None,
@@ -88,3 +90,4 @@ async def run_building_autocollect():
     except Exception as e:
         logger.error(f"Building auto-collect failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+

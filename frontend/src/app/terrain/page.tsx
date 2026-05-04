@@ -9,7 +9,7 @@ import {
   TreePine, Flame, Snowflake, Mountain, Globe2, Trees, Building2,
   Satellite, BarChart3, MapPinned, Leaf, Factory, Droplets, Home, Wheat,
   Cloud, Cpu, Calendar, Sun, CloudRain, CloudSun, Waves, Sprout,
-  Target, ShieldAlert, ShieldCheck, Zap, ScanSearch, BrainCircuit
+  Target, ShieldAlert, ShieldCheck, Zap, ScanSearch, BrainCircuit, Box
 } from "lucide-react";
 import Link from "next/link";
 import axios from "axios";
@@ -85,12 +85,26 @@ const TABS = [
 // ── Color palette for DW classes ─────────────────────────────
 const DW_COLORS: Record<string, string> = {
   Water: '#419BDF', Trees: '#397D49', Grass: '#88B053', 'Flooded Vegetation': '#7A87C6',
-  Crops: '#E49635', 'Shrub & Scrub': '#DFC35A', 'Built Area': '#C4281B', 'Bare Ground': '#A59B8F', 'Snow & Ice': '#B39FE1',
+  Crops: '#E49635', 'Shrub & Scrub': '#DFC35A', 'Built Area': '#C4281B', 'Bare Ground': '#A59B8F',
 };
+
+// ── Bhuvan LULC 250K year → WMS layer mapping ───────────────
+const BHUVAN_LAYERS: Record<number, string> = {
+  2004: 'LULC250K_0405', 2005: 'LULC250K_0506', 2006: 'LULC250K_0607',
+  2007: 'LULC250K_0708', 2008: 'LULC250K_0809', 2009: 'LULC250K_0910',
+  2010: 'LULC250K_1011', 2011: 'LULC250K_1112', 2012: 'LULC250K_1213',
+  2013: 'LULC250K_1314', 2014: 'LULC250K_1415', 2015: 'LULC250K_1516',
+  2016: 'LULC250K_1617', 2017: 'LULC250K_1718', 2018: 'LULC250K_1819',
+  2020: 'LULC250K_2021', 2021: 'LULC250K_2122', 2022: 'LULC250K_2223',
+  2023: 'LULC250K_2324', 2024: 'LULC250K_2425',
+};
+const BHUVAN_WMS_BASE = 'https://bhuvan-ras2.nrsc.gov.in/cgi-bin/LULC250K.exe';
 
 function TerrainGuardianInner() {
   const mapRef = useRef<MapRef | null>(null);
-  const [viewState, setViewState] = useState({ longitude: 78.9, latitude: 22.5, zoom: 5 });
+  const [viewState, setViewState] = useState({ longitude: 78.9, latitude: 22.5, zoom: 5, pitch: 0, bearing: 0 });
+
+
 
   // Draw state
   const [drawInstance, setDrawInstance] = useState<MapboxDraw | null>(null);
@@ -114,7 +128,7 @@ function TerrainGuardianInner() {
   const [localOverlay, setLocalOverlay] = useState<{ b64: string; coordinates: any } | null>(null);
 
   // LULC state
-  const [lulcYear, setLulcYear] = useState(2024);
+  const [lulcYear, setLulcYear] = useState(new Date().getFullYear() - 1);
   const [lulcSeason, setLulcSeason] = useState("annual");
   const [lulcModel, setLulcModel] = useState("dynamic_world");
   const [lulcResult, setLulcResult] = useState<any>(null);
@@ -126,7 +140,7 @@ function TerrainGuardianInner() {
 
   // Deforestation State
   const [defStartYear, setDefStartYear] = useState(2001);
-  const [defEndYear, setDefEndYear] = useState(2023);
+  const [defEndYear, setDefEndYear] = useState(new Date().getFullYear() - 1);
   const [defMinCanopy, setDefMinCanopy] = useState(20);
   const [deforestResult, setDeforestResult] = useState<any>(null);
   const [showDeforestReport, setShowDeforestReport] = useState(false);
@@ -142,8 +156,8 @@ function TerrainGuardianInner() {
   const [firePreEnd, setFirePreEnd] = useState("2023-05-01");
   const [firePostStart, setFirePostStart] = useState("2023-05-02");
   const [firePostEnd, setFirePostEnd] = useState("2023-09-01");
-  const [firmsStartDate, setFirmsStartDate] = useState("2020-01-01");
-  const [firmsEndDate, setFirmsEndDate] = useState("2025-12-31");
+  const [firmsStartDate, setFirmsStartDate] = useState("2000-11-01");
+  const [firmsEndDate, setFirmsEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [firmsConfidence, setFirmsConfidence] = useState(30);
   const [fireResult, setFireResult] = useState<any>(null);
   const [firmsResult, setFirmsResult] = useState<any>(null);
@@ -151,7 +165,7 @@ function TerrainGuardianInner() {
   const [showFireReport, setShowFireReport] = useState(false);
   
   // Snow State
-  const [snowYear, setSnowYear] = useState(2024);
+  const [snowYear, setSnowYear] = useState(new Date().getFullYear() - 1);
   const [snowIncludeTrend, setSnowIncludeTrend] = useState(true);
   const [snowIncludeSeasonal, setSnowIncludeSeasonal] = useState(false);
   const [snowIncludePersistence, setSnowIncludePersistence] = useState(false);
@@ -244,10 +258,16 @@ function TerrainGuardianInner() {
   const handleModeChange = (mode: string) => {
     if (drawInstance) { 
       try {
+        // Clear existing shapes before switching mode
+        drawInstance.deleteAll();
+        setSelectedPolygon(null);
+        setOverlayTiles(null);
+        setOverlayName("");
+        setLocalOverlay(null);
         drawInstance.changeMode(mode); 
         setActiveMode(mode); 
       } catch(e) {
-        console.warn("MapboxDraw is currently unmounted or stale", e);
+        console.warn("MapboxDraw mode change failed", e);
       }
     }
   };
@@ -255,17 +275,29 @@ function TerrainGuardianInner() {
   const handleClear = () => {
     if (drawInstance) {
       try {
+        // Delete all drawn features from the map
+        const allFeatures = drawInstance.getAll();
+        if (allFeatures?.features?.length > 0) {
+          const ids = allFeatures.features.map((f: any) => f.id);
+          drawInstance.delete(ids);
+        }
         drawInstance.deleteAll();
+        // Reset mode to drawing
+        drawInstance.changeMode("draw_rectangle");
+        setActiveMode("draw_rectangle");
       } catch(e) {
-        console.warn("MapboxDraw is currently unmounted or stale", e);
+        console.warn("MapboxDraw clear failed:", e);
       }
     }
     setSelectedPolygon(null);
     setGeoJsonText("");
+    setOverlayTiles(null);
     setOverlayName("");
     setLocalOverlay(null);
     setLulcResult(null);
     setFireResult(null);
+    setFirmsResult(null);
+    setFireRiskResult(null);
     setSnowResult(null);
     setLandslideResult(null);
     setDeforestResult(null);
@@ -281,6 +313,35 @@ function TerrainGuardianInner() {
 
   // ── LULC Analysis ──────────────────────────────────────────
   const runLulc = async () => {
+    // Bhuvan 250K — full India WMS tiles
+    if (lulcModel === 'bhuvan_250k') {
+      setLoading(true);
+      try {
+        const availableYears = Object.keys(BHUVAN_LAYERS).map(Number).sort((a, b) => a - b);
+        let bestYear = availableYears[availableYears.length - 1];
+        for (const y of availableYears) {
+          if (y <= lulcYear) bestYear = y;
+        }
+        const layerName = BHUVAN_LAYERS[bestYear];
+        setOverlayTiles(`bhuvan_wms:${layerName}`);
+        setOverlayName(`Bhuvan LULC 250K (${bestYear}-${String(bestYear + 1).slice(-2)})`);
+        setLulcResult({
+          status: 'success', bhuvan: true,
+          stats: {
+            source: `ISRO Bhuvan NRC LULC 250K (${bestYear}-${String(bestYear + 1).slice(-2)})`,
+            resolution: '250K scale',
+            year: bestYear, season: 'annual',
+            total_area_km2: 'All India', dominant_class: 'Visual Only (WMS)',
+            images_used: 'Pre-computed ISRO Dataset', class_areas_km2: {}, class_percentages: {},
+          },
+        });
+      } catch (err: any) {
+        alert(`Bhuvan LULC failed: ${err.message}`);
+      }
+      setLoading(false);
+      return;
+    }
+
     const geom = getGeometry();
     if (!geom) return;
 
@@ -457,7 +518,7 @@ function TerrainGuardianInner() {
         include_swe: snowIncludeSwe,
         include_s2: snowIncludeS2,
         trend_start_year: 2014,
-        trend_end_year: 2025,
+        trend_end_year: new Date().getFullYear(),
       });
       setSnowResult(res.data);
       if (res.data.snow_tiles) {
@@ -488,7 +549,7 @@ function TerrainGuardianInner() {
         setOverlayName("Deep Learning Susceptibility");
       } else if (res.data.class_tiles) {
         setOverlayTiles(res.data.class_tiles);
-        setOverlayName("Landslide Risk Classes");
+        setOverlayName(landslideEngine === "xgboost" ? "XGBoost Risk Classes" : "Landslide Risk Classes");
       }
     } catch (err: any) {
       alert(`Landslide analysis failed: ${err?.response?.data?.detail || err.message}`);
@@ -778,6 +839,22 @@ function TerrainGuardianInner() {
         },
       ],
     };
+  } else if (overlayTiles?.startsWith('bhuvan_wms:')) {
+    // Bhuvan WMS tiles — proxied through backend to avoid CORS
+    const layerName = overlayTiles.replace('bhuvan_wms:', '');
+    const serverUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const wmsUrl = `${serverUrl}/api/bhuvan/wms?LAYERS=${layerName}&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&FORMAT=image/png`;
+    mapStyle = {
+      ...MAP_STYLE,
+      sources: {
+        ...MAP_STYLE.sources,
+        "bhuvan-wms": { type: "raster" as const, tiles: [wmsUrl], tileSize: 256, attribution: "© ISRO/NRSC Bhuvan" },
+      },
+      layers: [
+        ...MAP_STYLE.layers,
+        { id: "bhuvan-wms-layer", type: "raster" as const, source: "bhuvan-wms", minzoom: 0, maxzoom: 16, paint: { "raster-opacity": 0.85 } },
+      ],
+    };
   } else if (overlayTiles) {
     mapStyle = {
       ...MAP_STYLE,
@@ -881,13 +958,15 @@ function TerrainGuardianInner() {
           {activeTab === "lulc" && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
               <div className="text-[10px] text-slate-500 font-mono tracking-wider border-l-2 border-emerald-500/30 pl-3">
-                Google Dynamic World — 10m Near Real-Time LULC
+                {lulcModel === 'bhuvan_250k' ? 'ISRO Bhuvan NRC — 250K Scale India LULC (2004–2025)' :
+                 lulcModel === 'custom_1dcnn' ? 'Custom 1D-CNN — Local TensorFlow Neural Network' :
+                 'Google Dynamic World — 10m Near Real-Time LULC'}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Year</label>
-                  <input type="number" min={2017} max={2025} value={lulcYear} onChange={(e) => setLulcYear(parseInt(e.target.value))}
+                  <input type="number" min={lulcModel === 'bhuvan_250k' ? 2004 : 2017} max={new Date().getFullYear()} value={lulcYear} onChange={(e) => setLulcYear(parseInt(e.target.value))}
                     className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-emerald-300 font-mono text-sm focus:border-emerald-500/50 focus:outline-none transition-colors" />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -896,6 +975,7 @@ function TerrainGuardianInner() {
                     value={lulcSeason}
                     onChange={setLulcSeason}
                     accentColor="#00d4aa"
+                    disabled={lulcModel === 'bhuvan_250k'}
                     options={[
                       { value: "annual", label: "Annual", icon: <Calendar className="w-3 h-3" /> },
                       { value: "kharif", label: "Kharif", icon: <CloudRain className="w-3 h-3" /> },
@@ -912,7 +992,8 @@ function TerrainGuardianInner() {
                     onChange={setLulcModel}
                     accentColor="#00d4aa"
                     options={[
-                      { value: "dynamic_world", label: "Google Dynamic World (Fast Cloud API)", icon: <Cloud className="w-3 h-3" />, description: "10m near real-time classification" },
+                      { value: "dynamic_world", label: "Google Dynamic World (Cloud API)", icon: <Cloud className="w-3 h-3" />, description: "10m near real-time classification" },
+                      { value: "bhuvan_250k", label: "ISRO Bhuvan LULC 250K", icon: <Satellite className="w-3 h-3" />, description: "India-only • 2004–2025 • AOI clipped" },
                       { value: "custom_1dcnn", label: "Custom 1D-CNN (Local TensorFlow)", icon: <Cpu className="w-3 h-3" />, description: "Neural network on local device" },
                     ]}
                   />
@@ -921,16 +1002,29 @@ function TerrainGuardianInner() {
               
               <AnimatePresence>
                 {lulcModel === "custom_1dcnn" && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="text-[10px] text-yellow-500/80 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2.5 font-mono">
-                    ⚠️ Running intense neural network classification via local device. Will export and bind PNG base64 frame mapping instead of dynamic Leaflet tiling.
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                    className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex items-start gap-2.5">
+                    <Cpu className="w-3.5 h-3.5 text-amber-400/70 mt-0.5 shrink-0" />
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Local neural network inference — exports PNG overlay instead of dynamic tiling. Best for areas under 150 km².
+                    </p>
+                  </motion.div>
+                )}
+                {lulcModel === "bhuvan_250k" && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                    className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex items-start gap-2.5">
+                    <Satellite className="w-3.5 h-3.5 text-sky-400/70 mt-0.5 shrink-0" />
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      ISRO Bhuvan NRC — Full India WMS coverage (2004–2025). No AOI required. Season filter is not available.
+                    </p>
                   </motion.div>
                 )}
               </AnimatePresence>
 
               {/* Run Button */}
-              <button onClick={runLulc} disabled={loading || !hasGeom || isTraining}
+              <button onClick={runLulc} disabled={loading || (!hasGeom && lulcModel !== 'bhuvan_250k') || isTraining}
                 className={`relative group overflow-hidden flex items-center justify-center gap-3 w-full py-3.5 rounded-full font-semibold tracking-wide transition-all duration-300 text-sm ${
-                  loading || !hasGeom || isTraining
+                  loading || (!hasGeom && lulcModel !== 'bhuvan_250k') || isTraining
                     ? 'bg-white/5 text-slate-500 cursor-not-allowed border border-white/10'
                     : 'bg-emerald-500 text-black shadow-[0_0_30px_rgba(0,212,170,0.2)] hover:shadow-[0_0_40px_rgba(0,212,170,0.4)] hover:bg-emerald-400'
                 }`}
@@ -965,7 +1059,6 @@ function TerrainGuardianInner() {
                       { value: "6", label: "Shrub & Scrub", icon: <Leaf className="w-3 h-3" /> },
                       { value: "7", label: "Built Area", icon: <Building2 className="w-3 h-3" /> },
                       { value: "8", label: "Bare Ground", icon: <Mountain className="w-3 h-3" /> },
-                      { value: "9", label: "Snow & Ice", icon: <Snowflake className="w-3 h-3" /> },
                     ]}
                   />
                   <button onClick={runHitlTraining} disabled={isTraining || !hasGeom}
@@ -1002,19 +1095,26 @@ function TerrainGuardianInner() {
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
                     className="flex flex-col gap-4 pt-3 border-t border-white/10"
                   >
-                    {/* Class area cards */}
-                    <div className="grid grid-cols-2 gap-2">
-                      {Object.entries(lulcResult.stats.class_areas_km2 || {}).map(([cls, area]) => {
-                        const pct = lulcResult.stats.class_percentages?.[cls] || 0;
-                        const color = DW_COLORS[cls] || '#00d4aa';
-                        return (
-                          <div key={cls} className="bg-black/40 border border-white/10 rounded-xl p-3 flex flex-col gap-1">
-                            <span className="font-mono text-base font-bold" style={{ color }}>{String(area)} km²</span>
-                            <span className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">{cls} ({String(pct)}%)</span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {/* Class area cards — or Bhuvan WMS info */}
+                    {lulcResult.bhuvan ? (
+                      <div className="bg-sky-500/5 border border-sky-500/20 rounded-xl p-4 flex flex-col gap-2">
+                        <span className="text-[10px] text-sky-400 uppercase tracking-widest font-bold">ISRO Bhuvan WMS Layer Active</span>
+                        <span className="text-[11px] text-slate-300">Pre-computed LULC 250K tiles from ISRO/NRC are displayed on the map. Per-class statistics are not available for this source — use the map legend for visual interpretation.</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(lulcResult.stats.class_areas_km2 || {}).map(([cls, area]) => {
+                          const pct = lulcResult.stats.class_percentages?.[cls] || 0;
+                          const color = DW_COLORS[cls] || '#00d4aa';
+                          return (
+                            <div key={cls} className="bg-black/40 border border-white/10 rounded-xl p-3 flex flex-col gap-1">
+                              <span className="font-mono text-base font-bold" style={{ color }}>{String(area)} km²</span>
+                              <span className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">{cls} ({String(pct)}%)</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Info card */}
                     <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
@@ -1048,7 +1148,7 @@ function TerrainGuardianInner() {
                     </div>
 
                     {/* Layer Switches */}
-                    {lulcModel !== "custom_1dcnn" && (
+                    {lulcModel !== "custom_1dcnn" && !lulcResult.bhuvan && (
                       <div className="flex flex-col gap-2">
                         <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Map Layers</span>
                         <div className="grid grid-cols-3 gap-1.5">
@@ -1347,7 +1447,7 @@ function TerrainGuardianInner() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Analysis Year</label>
-                    <input type="number" min="2014" max="2025" value={snowYear} onChange={(e) => setSnowYear(parseInt(e.target.value))}
+                    <input type="number" min="2014" max={new Date().getFullYear()} value={snowYear} onChange={(e) => setSnowYear(parseInt(e.target.value))}
                       className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-cyan-500/50" />
                   </div>
                   <div className="space-y-2 flex flex-col justify-end">
@@ -1754,6 +1854,7 @@ function TerrainGuardianInner() {
                     accentColor="#ef4444"
                     options={[
                       { value: "gee", label: "Heuristic / GEE (Random Forest)", icon: <ScanSearch className="w-3 h-3" />, description: "Slope, aspect & drainage analysis" },
+                      { value: "xgboost", label: "XGBoost / GEE (Gradient Boosting)", icon: <Zap className="w-3 h-3" />, description: "GEE-native gradient tree boost classifier" },
                       { value: "deep_learning", label: "Landslide4Sense U-Net (Deep Learning)", icon: <BrainCircuit className="w-3 h-3" />, description: "6-channel feature segmentation" },
                     ]}
                   />
@@ -1762,6 +1863,8 @@ function TerrainGuardianInner() {
                 <p className="text-xs text-slate-400 leading-relaxed">
                   {landslideEngine === "gee" 
                     ? "Calculates landslide susceptibility using a Random Forest model trained on variables including elevation, slope, aspect, and proximity to drainage."
+                    : landslideEngine === "xgboost"
+                    ? "Uses GEE-native Gradient Tree Boost (XGBoost) classifier on 9 terrain + spectral features including NDVI, NDWI, BSI, Slope, Elevation, HAND, and Precipitation."
                     : "Uses a Landslide4Sense U-Net Deep Learning model trained on a 6-channel feature set (RED/GREEN/BLUE/NDVI + SLOPE + ELEVATION)."}
                 </p>
 
@@ -1839,6 +1942,8 @@ function TerrainGuardianInner() {
                           landslideResult.slope_tiles && { id: landslideResult.slope_tiles, name: "Terrain Slope (Degrees)", color: "border-slate-500", text: "text-slate-400" },
                           landslideResult.elevation_tiles && { id: landslideResult.elevation_tiles, name: "Elevation (NASADEM)", color: "border-emerald-500", text: "text-emerald-400" },
                           landslideResult.hand_tiles && { id: landslideResult.hand_tiles, name: "Height Above Nearest Drainage", color: "border-blue-500", text: "text-blue-400" },
+                          landslideResult.precip_tiles && { id: landslideResult.precip_tiles, name: "Annual Precipitation (CHIRPS)", color: "border-teal-500", text: "text-teal-400" },
+                          landslideResult.temp_tiles && { id: landslideResult.temp_tiles, name: "Land Surface Temperature", color: "border-amber-500", text: "text-amber-400" },
                         ].filter(Boolean).map((layer: any, i) => (
                           <button key={i} onClick={() => switchLayer(layer.id, layer.name)}
                             className={`flex items-center gap-3 p-3 rounded-lg border text-xs transition-all ${
@@ -1890,7 +1995,7 @@ function TerrainGuardianInner() {
                       </div>
                       
                       <div className="mt-5 pt-4 border-t border-white/10 flex justify-between items-center text-[11px] text-slate-500">
-                         <span>Model Accuracy ({landslideEngine === 'gee' ? 'RF' : 'U-Net DL'}):</span>
+                         <span>Model Accuracy ({landslideEngine === 'gee' ? 'RF' : landslideEngine === 'xgboost' ? 'XGBoost' : 'U-Net DL'}):</span>
                          <span className="font-mono text-emerald-400">{landslideResult.stats?.accuracy}%</span>
                       </div>
 
@@ -1918,12 +2023,12 @@ function TerrainGuardianInner() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Start Year (2001+)</label>
-                    <input type="number" min="2001" max="2024" value={defStartYear} onChange={(e) => setDefStartYear(parseInt(e.target.value))}
+                    <input type="number" min="2001" max={new Date().getFullYear() - 1} value={defStartYear} onChange={(e) => setDefStartYear(parseInt(e.target.value))}
                       className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-green-500/50" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">End Year (≤2024)</label>
-                    <input type="number" min="2001" max="2024" value={defEndYear} onChange={(e) => setDefEndYear(parseInt(e.target.value))}
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">End Year (≤{new Date().getFullYear() - 1})</label>
+                    <input type="number" min="2001" max={new Date().getFullYear() - 1} value={defEndYear} onChange={(e) => setDefEndYear(parseInt(e.target.value))}
                       className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-green-500/50" />
                   </div>
                 </div>
@@ -2364,6 +2469,7 @@ function TerrainGuardianInner() {
           onMove={(evt) => setViewState(evt.viewState)}
           mapStyle={mapStyle as any}
           cursor="crosshair"
+          maxPitch={60}
         >
           <style dangerouslySetInnerHTML={{ __html: `.mapboxgl-ctrl-group.mapboxgl-ctrl { display: none !important; }` }} />
           <NavigationControl position="bottom-right" />
@@ -2384,6 +2490,7 @@ function TerrainGuardianInner() {
             className={`p-3 rounded-full border backdrop-blur-md transition-all shadow-lg ${activeMode === 'draw_polygon' ? 'bg-white border-white text-black scale-105' : 'bg-[#030712]/80 border-white/10 text-white hover:bg-white/10'}`}>
             <Hexagon className="w-5 h-5" />
           </button>
+
           <button onClick={handleClear} title="Clear Map"
             className="p-3 rounded-full border border-white/10 bg-[#030712]/80 backdrop-blur-md text-red-500 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all shadow-lg mt-2 group">
             <Trash2 className="w-5 h-5 group-hover:scale-110 transition-transform" />

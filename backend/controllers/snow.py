@@ -6,11 +6,6 @@ import asyncio, logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from backend.services.analysis.snow_cover import (
-    analyze_snow_cover, get_snow_trend, get_seasonal_snow,
-    get_snow_persistence, get_8day_snow_extent, get_snow_surface_temperature,
-    get_era5_snow, get_sentinel2_snow
-)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -32,6 +27,11 @@ class SnowRequest(BaseModel):
 async def run_snow(req: SnowRequest):
     try:
         logger.info(f"Snow analysis — year={req.year}")
+        from backend.services.analysis.snow_cover import (  # Lazy: GEE + heavy analysis
+            analyze_snow_cover, get_snow_trend, get_seasonal_snow,
+            get_snow_persistence, get_8day_snow_extent, get_snow_surface_temperature,
+            get_era5_snow, get_sentinel2_snow
+        )
         loop = asyncio.get_event_loop()
         task_keys = ['main']
         tasks = [loop.run_in_executor(None, lambda: analyze_snow_cover(req.geojson, req.year))]

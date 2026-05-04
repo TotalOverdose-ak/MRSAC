@@ -1,2 +1,2 @@
 # Analysis modules for Earth Watch — Terrain Guardian
-from . import gee_utils
+# All imports are lazy — modules load on first use

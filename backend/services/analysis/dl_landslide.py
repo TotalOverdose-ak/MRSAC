@@ -1,6 +1,7 @@
 import ee
 import logging
 import os
+os.environ['TF_USE_LEGACY_KERAS'] = '1'  # Required for loading Kaggle solution model
 import requests
 import rasterio
 import numpy as np
@@ -77,12 +78,38 @@ def _get_model_output_channels(model) -> int:
         raise ValueError(f"Cannot determine model output shape: {model.output_shape}")
     return int(out_shape[-1])
 
+def _get_custom_metrics():
+    """Custom metrics required for loading the Kaggle Landslide4Sense model."""
+    import tensorflow as tf
+    try:
+        from tf_keras import backend as K
+    except ImportError:
+        from tensorflow.keras import backend as K
+    
+    def recall_m(y_true, y_pred):
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+        return true_positives / (possible_positives + K.epsilon())
+    
+    def precision_m(y_true, y_pred):
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+        return true_positives / (predicted_positives + K.epsilon())
+    
+    def f1_m(y_true, y_pred):
+        precision = precision_m(y_true, y_pred)
+        recall = recall_m(y_true, y_pred)
+        return 2 * ((precision * recall) / (precision + recall + K.epsilon()))
+    
+    return {'f1_m': f1_m, 'precision_m': precision_m, 'recall_m': recall_m}
+
+
 def get_landslide_model():
     """
-    Lazy load the Landslide4Sense U-Net model to prevent blocking startup.
-    Loads architecture and weights from reference repository.
+    Lazy load the Landslide4Sense U-Net model.
+    Priority: Kaggle solution model > custom trained > reference notebooks.
+    Uses tf_keras for loading old-Keras-format models.
     """
-    import tensorflow as tf
     global _dl_model, _dl_model_path
     if _dl_model is None:
         env_path = os.environ.get("LANDSLIDE_MODEL_PATH", "").strip()
@@ -90,8 +117,16 @@ def get_landslide_model():
         if env_path:
             candidates.append(env_path)
 
-        # Custom trained model takes highest priority (trained with real GEE data)
+        # Kaggle Landslide4Sense solution (pre-trained, highest priority)
+        candidates.append(os.path.join('backend', 'ml_models', 'landslide_kaggle_unet.h5'))
+
+        # Custom trained model (trained with real GEE data)
         candidates.append(os.path.join('backend', 'ml_models', 'custom_landslide_best.h5'))
+
+        # Kaggle solution folder in project
+        candidates.append(os.path.join(
+            'landslide4sense-solution-main', 'model', 'best_model.h5'
+        ))
 
         # Default expected location for this project
         candidates.append(os.path.join('models', 'landslide', 'best_model.h5'))
@@ -107,7 +142,6 @@ def get_landslide_model():
         ))
 
         resolved = None
-        resolved_with_weights = None
 
         for p in candidates:
             ap = (
@@ -115,20 +149,9 @@ def get_landslide_model():
                 if not os.path.isabs(p)
                 else os.path.abspath(p)
             )
-            if not os.path.exists(ap):
-                continue
-
-            # Prefer model checkpoints that already have weights next to them.
-            w_path = ap.replace('.h5', '.weights.h5')
-            if os.path.exists(w_path):
-                resolved_with_weights = ap
-                break
-
-            if resolved is None:
+            if os.path.exists(ap):
                 resolved = ap
-
-        if resolved_with_weights is not None:
-            resolved = resolved_with_weights
+                break  # First existing candidate wins (list is priority-ordered)
 
         if resolved is None:
             searched = "\n".join(
@@ -145,7 +168,21 @@ def get_landslide_model():
 
         _dl_model_path = resolved
         logger.info(f"Loading UNet Landslide Model from {_dl_model_path}...")
-        _dl_model = tf.keras.models.load_model(_dl_model_path, compile=False)
+
+        # Use tf_keras for loading old-format Keras models (Kaggle solution compatibility)
+        try:
+            import tf_keras
+            custom_objects = _get_custom_metrics()
+            _dl_model = tf_keras.models.load_model(
+                _dl_model_path, custom_objects=custom_objects, compile=False
+            )
+            logger.info("[LANDSLIDE DL] Loaded model via tf_keras (legacy mode)")
+        except Exception as e:
+            logger.warning(f"[LANDSLIDE DL] tf_keras load failed ({e}), falling back to tf.keras...")
+            import tensorflow as tf
+            _dl_model = tf.keras.models.load_model(_dl_model_path, compile=False)
+
+        logger.info(f"[LANDSLIDE DL] Model input: {_dl_model.input_shape}, output: {_dl_model.output_shape}")
 
         # Load fine-tuned weights if they exist (saved alongside base model)
         fine_tuned_path = _dl_model_path.replace('.h5', '.weights.h5')
@@ -335,6 +372,72 @@ def analyze_landslide_dl(geojson_geom):
         [lon_min, lat_min]  # Bottom-Left
     ]
     
+    # ── GEE TERRAIN VISUALIZATION TILES ─────────────────────────
+    # Generate the same terrain overlay layers that the RF path provides,
+    # so the frontend can switch between layers in custom model mode too.
+    print("[LANDSLIDE DL] → Generating GEE terrain overlay tiles...")
+
+    try:
+        dem = ee.Image('NASA/NASADEM_HGT/001').select('elevation').clip(region)
+        slope_img = ee.Terrain.slope(dem).rename('slope').clip(region)
+        elevation_img = dem.rename('elevation').clip(region)
+        hand_img = (ee.Image('users/gena/GlobalHAND/30m/hand-1000')
+                    .clip(region).rename('hand'))
+
+        slope_vis = slope_img.visualize(
+            min=0, max=60, palette=['#0d1117', '#1c2535', '#f5a623', '#ff3d5a', '#ff0000'])
+        elevation_vis = elevation_img.visualize(
+            min=0, max=3000, palette=['#00c48c', '#90ee90', '#ffffcc', '#f5a623', '#ff3d5a', '#800000'])
+        hand_vis = hand_img.visualize(
+            min=0, max=100, palette=['#0d1117', '#1c2535', '#4da6ff', '#00d4aa', '#00c48c'])
+
+        slope_tiles = get_map_tiles(slope_vis)
+        print("[LANDSLIDE DL]   ✓ slope_tiles")
+        elev_tiles = get_map_tiles(elevation_vis)
+        print("[LANDSLIDE DL]   ✓ elevation_tiles")
+        hand_tiles = get_map_tiles(hand_vis)
+        print("[LANDSLIDE DL]   ✓ hand_tiles")
+    except Exception as e:
+        logger.warning(f"[LANDSLIDE DL] Terrain tile generation failed: {e}")
+        slope_tiles, elev_tiles, hand_tiles = None, None, None
+
+    # Climate overlay layers (precipitation, temperature)
+    precip_tiles, temp_tiles = None, None
+    try:
+        from datetime import datetime as _dt
+        _cy = _dt.now().year
+        _ly = _cy - 1
+        chirps = (ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY')
+                  .filterBounds(region)
+                  .filterDate(f'{_ly}-01-01', f'{_ly}-12-31'))
+        precip = chirps.sum().rename('precipitation').clip(region)
+        precip_vis = precip.visualize(
+            min=0, max=3000,
+            palette=['#ffffe5', '#f7fcb9', '#d9f0a3', '#addd8e',
+                     '#78c679', '#41ab5d', '#238443', '#005a32'])
+        precip_tiles = get_map_tiles(precip_vis)
+        print("[LANDSLIDE DL]   ✓ precip_tiles")
+    except Exception as e:
+        logger.warning(f"[LANDSLIDE DL] Precipitation overlay failed: {e}")
+
+    try:
+        from datetime import datetime as _dt2
+        _cy2 = _dt2.now().year
+        _ly2 = _cy2 - 1
+        modis = (ee.ImageCollection('MODIS/061/MOD11A1')
+                 .filterBounds(region)
+                 .select('LST_Day_1km')
+                 .filterDate(f'{_ly2}-01-01', f'{_ly2}-12-31'))
+        lst = modis.median().multiply(0.02).subtract(273.15).rename('temperature').clip(region)
+        temp_vis = lst.visualize(
+            min=0, max=40,
+            palette=['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8',
+                     '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'])
+        temp_tiles = get_map_tiles(temp_vis)
+        print("[LANDSLIDE DL]   ✓ temp_tiles")
+    except Exception as e:
+        logger.warning(f"[LANDSLIDE DL] Temperature overlay failed: {e}")
+
     print("[LANDSLIDE DL] ━━━ Analysis complete! ━━━")
     
     return {
@@ -349,11 +452,13 @@ def analyze_landslide_dl(geojson_geom):
         },
         'custom_image_b64': img_b64,
         'coordinates': overlay_coordinates,
-        # Keep empty placeholders for standard generic tiles since we use local overlay
         'probability_tiles': None,
         'class_tiles': None,
-        'slope_tiles': None,
-        'elevation_tiles': None,
+        'slope_tiles': slope_tiles,
+        'elevation_tiles': elev_tiles,
+        'hand_tiles': hand_tiles,
+        'precip_tiles': precip_tiles,
+        'temp_tiles': temp_tiles,
     }
 
 def train_landslide_active_learning(geojson_geom, class_label):

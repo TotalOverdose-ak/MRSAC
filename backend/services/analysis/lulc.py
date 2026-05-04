@@ -22,7 +22,6 @@ DW_CLASSES = {
     5: {'name': 'Shrub & Scrub',      'color': '#DFC35A', 'band': 'shrub_and_scrub'},
     6: {'name': 'Built Area',         'color': '#C4281B', 'band': 'built'},
     7: {'name': 'Bare Ground',        'color': '#A59B8F', 'band': 'bare'},
-    8: {'name': 'Snow & Ice',         'color': '#B39FE1', 'band': 'snow_and_ice'},
 }
 
 
@@ -103,7 +102,7 @@ def analyze_lulc(geojson_geom, year=None, season='annual'):
     mndwi = green.subtract(swir1).divide(green.add(swir1).max(0.001)).rename('MNDWI')
 
     # ── AREA PER CLASS ─────────────────────────────────────────
-    print(f'[LULC] → Computing area per class (9 classes)...')
+    print(f'[LULC] → Computing area per class (8 classes)...')
     pixel_area = ee.Image.pixelArea().divide(1e6)  # km²
     class_areas = {}
     for cls_val, cls_info in DW_CLASSES.items():
@@ -142,7 +141,7 @@ def analyze_lulc(geojson_geom, year=None, season='annual'):
     print(f'[LULC] → Generating map tiles...')
     # LULC classification (Dynamic World palette)
     palette = [info['color'] for info in DW_CLASSES.values()]
-    lulc_vis = dw_label.visualize(min=0, max=8, palette=palette)
+    lulc_vis = dw_label.visualize(min=0, max=7, palette=palette)
 
     # RGB composite
     rgb_vis = s2_composite.select(['B4', 'B3', 'B2']).visualize(

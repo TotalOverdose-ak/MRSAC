@@ -1,8 +1,8 @@
-# 🌍 LULC Module — PPT Content (1–2 Slides)
+# 🌍 LULC Module — PPT Content (3 Slides)
 
 ---
 
-## Slide 1 — LULC: Land Use Land Cover Classification
+## Slide 1 — LULC: Near Real-Time Land Cover Mapping (EXISTING — minor updates)
 
 ### What is LULC?
 - Classifying every pixel of a satellite image into a **land cover type** (Water, Trees, Crops, Built Area, etc.)
@@ -38,7 +38,7 @@ Our LULC module has **two modes** the user can switch between:
 
 ---
 
-## Slide 2 — Custom 1D-CNN: Architecture, Training & Active Learning
+## Slide 2 — LULC Workflow: Architecture, Training & Active Learning (EXISTING — no changes)
 
 ### Input Features (10-Band Pixel Vector)
 Each pixel is described by **10 features** extracted from Sentinel-2:
@@ -55,30 +55,6 @@ Each pixel is described by **10 features** extracted from Sentinel-2:
 | 8 | NDBI | Index | Built-up Index = (SWIR1 − NIR) / (SWIR1 + NIR) |
 | 9 | MNDWI | Index | Water Index = (Green − SWIR1) / (Green + SWIR1) |
 | 10 | NDSLI | Index | Soil/Land Index = (SWIR1 − Red) / (SWIR1 + Red) |
-
-### What Each Band/Index Means (PPT-Ready Explanation)
-
-**6 Raw Spectral Bands** — what the satellite sensor captures at different wavelengths:
-
-| Band | What It Captures |
-|------|-----------------|
-| **B2 (Blue)** | Reflects strongly from water — helps detect water bodies |
-| **B3 (Green)** | Healthy vegetation reflects green light — helps separate green areas |
-| **B4 (Red)** | Plants absorb red light for photosynthesis — low red = healthy vegetation |
-| **B8 (NIR)** | Invisible to human eyes. Healthy plants strongly reflect NIR — most important band for vegetation mapping |
-| **B11 (SWIR-1)** | Sensitive to soil moisture and vegetation water content |
-| **B12 (SWIR-2)** | Detects dry vs wet surfaces and burned areas |
-
-**4 Computed Indices** — mathematical ratios calculated from the raw bands to highlight specific land types:
-
-| Index | Formula | What It Detects |
-|-------|---------|-----------------|
-| **NDVI** | (NIR − Red) / (NIR + Red) | Vegetation density & health. High = dense green, Low = bare/urban |
-| **NDBI** | (SWIR − NIR) / (SWIR + NIR) | Built-up / urban areas. Concrete & buildings reflect more SWIR than NIR |
-| **MNDWI** | (Green − SWIR) / (Green + SWIR) | Water bodies. Water reflects green but absorbs SWIR |
-| **NDSLI** | (SWIR − Red) / (SWIR + Red) | Bare soil vs vegetated land |
-
-> **Why these 10?** — 6 raw bands capture what the satellite "sees" at different wavelengths (visible + infrared). 4 indices are mathematical combinations that **amplify the contrast** between specific land types (vegetation, water, buildings, soil). Together, they give the 1D-CNN model enough information to distinguish all 9 land cover classes.
 
 ### 1D-CNN Model Architecture
 
@@ -145,6 +121,73 @@ Updated model used for next prediction
 
 ---
 
+## Slide 3 — ★ NEW ★ LULC: Analytical Outputs & Multi-Year Analysis
+
+### Title: LULC — Analytical Report, Map Layers & Temporal Analysis
+
+---
+
+### Left Column — "Output Capabilities"
+
+**8 Interactive Map Layers Generated:**
+
+| # | Layer | What It Shows |
+|---|-------|---------------|
+| 1 | **LULC Classification** | 9-class land cover map (Dynamic World palette) |
+| 2 | **RGB Composite** | True-color Sentinel-2 satellite view |
+| 3 | **NDVI Heatmap** | Vegetation health — Green = healthy, Red = barren |
+| 4 | **NDBI Heatmap** | Built-up density — Red = urban, Green = natural |
+| 5 | **MNDWI Heatmap** | Water presence — Blue = water, Brown = dry |
+| 6 | **Built Area Probability** | Per-pixel probability of being "Built Area" |
+| 7 | **Trees Probability** | Per-pixel probability of being "Trees" |
+| 8 | **Crops Probability** | Per-pixel probability of being "Crops" |
+
+> User can switch between any layer on the interactive map
+
+**Seasonal Composites (5 modes):**
+
+| Season | Months | Use Case |
+|--------|--------|----------|
+| Annual | Jan-Dec | Full year overview |
+| Kharif | Jul-Oct | Monsoon / paddy season |
+| Rabi | Nov-Mar | Winter crop season |
+| Dry | Oct-Dec | Post-monsoon |
+| Wet | Jun-Sep | Peak monsoon |
+
+> Why seasons matter: Same area shows "Crops" in Kharif but "Bare Ground" in summer.
+
+---
+
+### Right Column — "Analytical Report & Multi-Year Comparison"
+
+**Glassmorphism Analytical Report:**
+- **Interactive SVG Donut Chart** — class distribution with hover tooltips
+- **Animated Bar Chart** — area distribution per class (in km²)
+- **Summary Statistics** — total area, dominant class, year, resolution, images used
+- **DW Color Legend** — all 9 classes with official colors
+- **One-Click PDF Export** — high-fidelity A4 report with unique tracking ID
+
+**Multi-Year Temporal Comparison:**
+- User selects **2-4 years** (2017 to 2025) for comparison
+- System runs separate LULC analysis for each year
+- **Multi-Year Bar Chart** — side-by-side area comparison per class
+- **Change Detection Cards** — shows % increase / decrease per class
+
+> Example: "Trees ↓ -12.3%", "Built Area ↑ +8.7%" over 5 years → quantified urbanization
+
+**PDF Report Features:**
+- **Technology:** html-to-image + jsPDF (browser-native rendering)
+- **Unique Report ID:** EW-LULC-{timestamp}-{random} for tracking
+- **Format:** A4 portrait, glassmorphism dark design, multi-page support
+
+---
+
+### Bottom Strip
+
+**Salt Pan Fix:** Dynamic World misclassifies bright salt pans (Rann of Kutch) as "Snow & Ice" — our system remaps Class 8 → Class 7 (Bare Ground) for accurate Indian landscape mapping.
+
+---
+
 ## Key Talking Points for Viva / Q&A
 
 > **Q: Why 1D-CNN and not 2D-CNN for LULC?**
@@ -156,8 +199,11 @@ Updated model used for next prediction
 > **Q: What is the accuracy?**
 > A: The final **Test Accuracy is 82.11%** (evaluated on 20% held-out test set after training on ~12,000 pixel samples).
 
-> **Q: How does Active Learning work?**
-> A: The user draws a polygon on the map, selects the correct class, and the system extracts the spectral features, adds them to the training CSV, and re-trains the model automatically. This is **Human-in-the-Loop (HITL)** learning.
+> **Q: How does the Multi-Year comparison work?**
+> A: User selects 2-4 years, system calls the LULC API for each year independently, collects class-wise area (km²), and computes percentage change between first and last year for each class. This quantifies land cover change (urbanization, deforestation etc.) over time.
 
-> **Q: What is Knowledge Distillation here?**
-> A: We use Dynamic World as a "teacher" to auto-label pixels. The 1D-CNN "student" is trained on these teacher-given labels + real satellite data. This scales the dataset without manual effort.
+> **Q: Why 8 map layers?**
+> A: 5 standard layers (LULC, RGB, NDVI, NDBI, MNDWI) for classification + analysis. Plus 3 probability heatmaps (Built, Trees, Crops) that show the **model's confidence** — not just the final classification. This helps identify areas where the model is uncertain.
+
+> **Q: What is the PDF report for?**
+> A: For stakeholders and decision-makers. Field officers and district authorities need a downloadable report they can print, not a web dashboard. Each report has a unique ID for traceability.

@@ -17,7 +17,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from shapely.geometry import shape as shp
 
-from backend.services.analysis import mine_detection
 from backend.config import OUTPUT_DIR
 from backend.utils.db import get_api_db
 from backend.utils.thumbnail import make_thumbnail
@@ -38,6 +37,7 @@ def analyze_area(req: GeoJSONRequest):
     """
     try:
         logger.info("Running Earth Engine + PyTorch detection pipeline.")
+        from backend.services.analysis import mine_detection  # Lazy load: PyTorch + smp only when needed
         out_gj = mine_detection.run(json.dumps(req.geojson))
 
         features    = out_gj.get("features", [])

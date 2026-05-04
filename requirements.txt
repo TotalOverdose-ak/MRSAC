@@ -17,7 +17,10 @@ torchvision
 torchaudio
 segmentation-models-pytorch>=0.3.4
 tensorflow>=2.10.0
+tf_keras
 scikit-learn>=1.2.0
+xgboost>=2.0.0
+kagglehub
 numpy>=1.24.0
 scipy>=1.11.0
 scikit-image>=0.21.0

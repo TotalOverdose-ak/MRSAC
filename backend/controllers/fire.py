@@ -15,30 +15,29 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.services.analysis.forest_fire import analyze_burn_severity
-from backend.services.analysis.firms_loader import (
-    load_firms_data, get_geojson_fires, get_fire_stats, _fire_df
-)
-from backend.services.analysis.fire_risk_model import (
-    train_fire_risk_model, predict_fire_risk, _ensure_trained
-)
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Track whether FIRMS data has been lazy-loaded
+_firms_loaded = False
 
-# ── Preload FIRMS data at import time ─────────────────────────
-# This runs once when the controller is first imported (server startup)
-try:
-    load_firms_data()
-    # Auto-train risk model if FIRMS data loaded successfully
-    from backend.services.analysis.firms_loader import _fire_df as _firms_df
-    if _firms_df is not None and not _firms_df.empty:
-        if not _ensure_trained():
-            logger.info("Training fire risk model on startup...")
-            train_fire_risk_model(_firms_df, validation_year=2025)
-except Exception as e:
-    logger.warning(f"FIRMS preload/training skipped: {e}")
+def _ensure_firms_loaded():
+    """Lazy-load FIRMS data on first use instead of at startup."""
+    global _firms_loaded
+    if _firms_loaded:
+        return
+    try:
+        from backend.services.analysis.firms_loader import load_firms_data, _fire_df
+        load_firms_data()
+        from backend.services.analysis.fire_risk_model import _ensure_trained, train_fire_risk_model
+        from backend.services.analysis.firms_loader import _fire_df as _firms_df
+        if _firms_df is not None and not _firms_df.empty:
+            if not _ensure_trained():
+                logger.info("Training fire risk model on first use...")
+                train_fire_risk_model(_firms_df, validation_year=2025)
+        _firms_loaded = True
+    except Exception as e:
+        logger.warning(f"FIRMS lazy-load/training skipped: {e}")
 
 
 # ── Request Models ────────────────────────────────────────────
@@ -117,6 +116,7 @@ async def run_fire(req: FireRequest):
             f"post: {req.post_start}→{req.post_end}"
         )
 
+        from backend.services.analysis.forest_fire import analyze_burn_severity  # Lazy: GEE
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
@@ -146,6 +146,8 @@ async def get_fire_hotspots(req: FireHotspotRequest):
         logger.info(f"FIRMS hotspot query — dates: {req.start_date}→{req.end_date}, "
                      f"confidence≥{req.confidence_min}, max={req.max_points}")
 
+        _ensure_firms_loaded()
+        from backend.services.analysis.firms_loader import get_geojson_fires  # Lazy: FIRMS
         bbox = _geojson_to_bbox(req.geojson)
 
         loop = asyncio.get_event_loop()
@@ -184,6 +186,8 @@ async def get_fire_statistics(req: FireStatsRequest):
     try:
         logger.info(f"FIRMS stats query — dates: {req.start_date}→{req.end_date}")
 
+        _ensure_firms_loaded()
+        from backend.services.analysis.firms_loader import get_fire_stats  # Lazy: FIRMS
         bbox = _geojson_to_bbox(req.geojson)
 
         loop = asyncio.get_event_loop()
@@ -211,7 +215,9 @@ async def fire_risk_prediction(req: FireRiskRequest):
     try:
         logger.info(f"Fire risk prediction requested — cell_size: {req.cell_size}°")
 
+        _ensure_firms_loaded()
         from backend.services.analysis.firms_loader import _fire_df as firms_data
+        from backend.services.analysis.fire_risk_model import predict_fire_risk, _ensure_trained, train_fire_risk_model  # Lazy: sklearn
         if firms_data is None or firms_data.empty:
             raise HTTPException(status_code=503, detail="FIRMS data not loaded. Restart the server.")
 
@@ -246,7 +252,9 @@ async def fire_risk_prediction(req: FireRiskRequest):
 async def retrain_fire_risk_model():
     """Force retrain the fire risk model on current FIRMS data."""
     try:
+        _ensure_firms_loaded()
         from backend.services.analysis.firms_loader import _fire_df as firms_data
+        from backend.services.analysis.fire_risk_model import train_fire_risk_model  # Lazy: sklearn
         if firms_data is None or firms_data.empty:
             raise HTTPException(status_code=503, detail="FIRMS data not loaded.")
 

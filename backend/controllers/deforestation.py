@@ -12,10 +12,6 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.services.analysis.deforestation import (
-    analyze_deforestation, clear_cache, get_cache_info,
-)
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -47,6 +43,7 @@ async def run_deforestation(req: DeforestationRequest):
             f"min_canopy={req.min_canopy}, include_ndvi={req.include_ndvi}"
         )
 
+        from backend.services.analysis.deforestation import analyze_deforestation  # Lazy: GEE
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
@@ -74,11 +71,13 @@ async def run_deforestation(req: DeforestationRequest):
 @router.get("/api/deforestation/cache")
 async def cache_status():
     """Return current cache stats."""
+    from backend.services.analysis.deforestation import get_cache_info  # Lazy
     return get_cache_info()
 
 
 @router.delete("/api/deforestation/cache")
 async def cache_clear():
     """Clear all cached deforestation results."""
+    from backend.services.analysis.deforestation import clear_cache  # Lazy
     clear_cache()
     return {"status": "cleared", "entries": 0}

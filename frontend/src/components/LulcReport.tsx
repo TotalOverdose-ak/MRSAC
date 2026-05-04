@@ -22,7 +22,7 @@ const DW_COLORS: Record<string, string> = {
   Water: "#419BDF", Trees: "#397D49", Grass: "#88B053",
   "Flooded Vegetation": "#7A87C6", Crops: "#E49635",
   "Shrub & Scrub": "#DFC35A", "Built Area": "#C4281B",
-  "Bare Ground": "#A59B8F", "Snow & Ice": "#B39FE1",
+  "Bare Ground": "#A59B8F",
 };
 
 // ── SVG Donut Chart ──────────────────────────────────────────
@@ -246,6 +246,7 @@ export default function LulcReport({
   const [comparisonDone, setComparisonDone] = useState(false);
 
   const stats = lulcResult?.stats;
+  const isBhuvan = !!lulcResult?.bhuvan;
   const classAreas: Record<string, number> = stats?.class_areas_km2 || {};
   const classPct: Record<string, number> = stats?.class_percentages || {};
   const totalArea: number = Number(stats?.total_area_km2) || 0;
@@ -343,57 +344,87 @@ export default function LulcReport({
             {/* ═══ REPORT BODY ═══ */}
             <div ref={reportRef} className="relative z-10 p-5 flex flex-col gap-5">
 
-              {/* ── Section 1: Donut + Stats ────────────────── */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col items-center gap-3">
-                  <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold w-full">Class Distribution</h3>
-                  <DonutChart data={classAreas} totalArea={totalArea} dominant={dominant} />
-                </div>
-
-                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col gap-3">
-                  <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">Analysis Summary</h3>
-                  <div className="flex flex-col gap-2">
-                    {[
-                      ["Total Area", `${totalArea.toFixed(2)} km²`],
-                      ["Dominant Class", dominant],
-                      ["Year", stats?.year],
-                      ["Season", stats?.season?.toUpperCase()],
-                      ["Resolution", stats?.resolution],
-                      ["Images Used", stats?.images_used],
-                      ["Model", stats?.source],
-                    ].map(([label, val]) => (
-                      <div key={String(label)} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
-                        <span className="text-[11px] text-slate-500">{String(label)}</span>
-                        <span className="text-[11px] text-slate-200 font-mono font-medium">{String(val)}</span>
-                      </div>
-                    ))}
+              {/* ── Section 1: Stats Summary ────────────────── */}
+              {isBhuvan ? (
+                <>
+                  {/* Bhuvan WMS metadata */}
+                  <div className="bg-sky-500/5 border border-sky-500/20 rounded-xl p-5 flex flex-col gap-3">
+                    <h3 className="text-[10px] text-sky-400 uppercase tracking-[0.2em] font-bold">ISRO Bhuvan LULC 250K — WMS Tile Source</h3>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">This analysis uses pre-computed LULC data published by ISRO's National Remote Sensing Centre (NRSC) via Bhuvan WMS. Per-class area statistics are not available from this source — the map provides visual-only tile rendering at 250K scale across India.</p>
                   </div>
-                </div>
-              </div>
-
-              {/* ── Section 2: Bar Chart ─────────────────────── */}
-              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
-                <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-4">Area Distribution — {stats?.year}</h3>
-                <BarChart data={classAreas} totalArea={totalArea} />
-              </div>
-
-              {/* ── Section 3: Legend ─────────────────────────── */}
-              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-3">LULC Classes (Dynamic World)</h3>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  {Object.entries(DW_COLORS).map(([cls, color]) => (
-                    <div key={cls} className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded" style={{ backgroundColor: color }} />
-                      <span className="text-[10px] text-slate-400">{cls}</span>
+                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col gap-3">
+                    <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">Source Metadata</h3>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        ["Source", stats?.source],
+                        ["Year", stats?.year],
+                        ["Season", stats?.season?.toUpperCase()],
+                        ["Resolution", stats?.resolution],
+                        ["Coverage", stats?.total_area_km2],
+                        ["Dataset", stats?.images_used],
+                      ].map(([label, val]) => (
+                        <div key={String(label)} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                          <span className="text-[11px] text-slate-500">{String(label)}</span>
+                          <span className="text-[11px] text-slate-200 font-mono font-medium">{String(val)}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col items-center gap-3">
+                      <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold w-full">Class Distribution</h3>
+                      <DonutChart data={classAreas} totalArea={totalArea} dominant={dominant} />
+                    </div>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col gap-3">
+                      <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">Analysis Summary</h3>
+                      <div className="flex flex-col gap-2">
+                        {[
+                          ["Total Area", `${totalArea.toFixed(2)} km\u00B2`],
+                          ["Dominant Class", dominant],
+                          ["Year", stats?.year],
+                          ["Season", stats?.season?.toUpperCase()],
+                          ["Resolution", stats?.resolution],
+                          ["Images Used", stats?.images_used],
+                          ["Model", stats?.source],
+                        ].map(([label, val]) => (
+                          <div key={String(label)} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                            <span className="text-[11px] text-slate-500">{String(label)}</span>
+                            <span className="text-[11px] text-slate-200 font-mono font-medium">{String(val)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
 
-              {/* ── Section 4: Multi-Year Comparison ──────────── */}
+                  {/* Bar Chart */}
+                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5">
+                    <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-4">Area Distribution \u2014 {stats?.year}</h3>
+                    <BarChart data={classAreas} totalArea={totalArea} />
+                  </div>
+
+                  {/* Legend */}
+                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                    <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-3">LULC Classes (Dynamic World)</h3>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                      {Object.entries(DW_COLORS).map(([cls, color]) => (
+                        <div key={cls} className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded" style={{ backgroundColor: color }} />
+                          <span className="text-[10px] text-slate-400">{cls}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* ── Multi-Year Comparison (GEE engines only) ──── */}
+              {!isBhuvan && (
               <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 print:break-before-page">
                 <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-1">Multi-Year Comparison</h3>
-                <p className="text-[10px] text-slate-600 mb-4">Add 2–4 years and compare how land cover changed over time.</p>
+                <p className="text-[10px] text-slate-600 mb-4">Add 2\u20134 years and compare how land cover changed over time.</p>
 
                 {/* Year picker */}
                 <div className="flex items-center gap-2 mb-3 print:hidden">
@@ -457,7 +488,7 @@ export default function LulcReport({
                   >
                     <div>
                       <h4 className="text-[10px] text-slate-500 uppercase tracking-[0.15em] font-bold mb-3">
-                        Change Summary ({multiYearData[0].year} → {multiYearData[multiYearData.length - 1].year})
+                        Change Summary ({multiYearData[0].year} \u2192 {multiYearData[multiYearData.length - 1].year})
                       </h4>
                       <ChangeCards yearData={multiYearData} />
                     </div>
@@ -471,6 +502,7 @@ export default function LulcReport({
                   </motion.div>
                 )}
               </div>
+              )}
 
             </div>
 
@@ -480,7 +512,7 @@ export default function LulcReport({
                 Earth Watch · MRSAC · {reportId} · {reportTime}
               </span>
               <span className="text-[9px] text-slate-600 font-mono">
-                Sentinel-2 · 10m · Google Dynamic World V1
+                {isBhuvan ? 'ISRO NRSC Bhuvan \u00B7 250K \u00B7 WMS' : 'Sentinel-2 \u00B7 10m \u00B7 Google Dynamic World V1'}
               </span>
             </div>
           </motion.div>

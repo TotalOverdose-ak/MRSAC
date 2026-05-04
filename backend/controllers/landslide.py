@@ -10,9 +10,6 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.services.analysis.landslide import analyze_landslide
-from backend.services.analysis.dl_landslide import analyze_landslide_dl
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -34,11 +31,19 @@ async def run_landslide(req: LandslideRequest):
         loop = asyncio.get_event_loop()
         
         if req.engine == "deep_learning":
+            from backend.services.analysis.dl_landslide import analyze_landslide_dl  # Lazy: TensorFlow
             result = await loop.run_in_executor(
                 None,
                 lambda: analyze_landslide_dl(req.geojson),
             )
+        elif req.engine == "xgboost":
+            from backend.services.analysis.xgb_landslide import analyze_landslide_xgb  # Lazy: XGBoost
+            result = await loop.run_in_executor(
+                None,
+                lambda: analyze_landslide_xgb(req.geojson),
+            )
         else:
+            from backend.services.analysis.landslide import analyze_landslide  # Lazy: GEE
             result = await loop.run_in_executor(
                 None,
                 lambda: analyze_landslide(req.geojson),

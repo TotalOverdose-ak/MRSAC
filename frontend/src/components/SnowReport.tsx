@@ -106,17 +106,39 @@ function ElevationBars({ zones }: { zones: any[] }) {
   );
 }
 
-// ── Snow Trend Chart (Horizontal Bars) ────────────────────────
+// ── Snow Trend Chart (SVG Line/Area Graph) ────────────────────
 function SnowTrendChart({ data }: { data: any[] }) {
-  if (!data || data.length === 0) return null;
-  const maxArea = Math.max(...data.map(d => d.area_km2), 1);
+  if (!data || data.length < 2) return null;
 
-  // Calculate trend
   const firstYear = data[0];
   const lastYear = data[data.length - 1];
   const trendPct = firstYear.area_km2 > 0
     ? ((lastYear.area_km2 - firstYear.area_km2) / firstYear.area_km2) * 100
     : 0;
+
+  // Chart dimensions
+  const W = 560, H = 200, padL = 60, padR = 20, padT = 10, padB = 40;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  const areas = data.map(d => d.area_km2);
+  const minA = Math.min(...areas) * 0.85;
+  const maxA = Math.max(...areas) * 1.1;
+
+  const xScale = (i: number) => padL + (i / (data.length - 1)) * chartW;
+  const yScale = (v: number) => padT + chartH - ((v - minA) / (maxA - minA || 1)) * chartH;
+
+  // Build polyline and area paths
+  const points = data.map((d, i) => `${xScale(i)},${yScale(d.area_km2)}`);
+  const linePath = points.join(' ');
+  const areaPath = `M${xScale(0)},${yScale(data[0].area_km2)} ${points.map((p, i) => i === 0 ? '' : `L${p}`).join(' ')} L${xScale(data.length - 1)},${padT + chartH} L${xScale(0)},${padT + chartH} Z`;
+
+  // Y-axis ticks (5 steps)
+  const yTicks = Array.from({ length: 5 }, (_, i) => minA + (i / 4) * (maxA - minA));
+
+  // Peak/min markers
+  const peakIdx = areas.indexOf(Math.max(...areas));
+  const minIdx = areas.indexOf(Math.min(...areas));
 
   return (
     <div className="flex flex-col gap-3 w-full">
@@ -133,32 +155,57 @@ function SnowTrendChart({ data }: { data: any[] }) {
         </span>
       </div>
 
-      {/* Bars */}
-      {data.map((d) => {
-        const barWidth = (d.area_km2 / maxArea) * 100;
-        const intensity = d.area_km2 / maxArea;
-        const color = intensity > 0.7 ? '#22d3ee' : intensity > 0.4 ? '#38bdf8' : '#60a5fa';
-        return (
-          <div key={d.year} className="group">
-            <div className="flex items-center justify-between mb-0.5">
-              <span className="text-[11px] text-slate-400 font-mono w-10">{d.year}</span>
-              <span className="text-[11px] text-slate-300 font-mono">
-                {d.area_km2} km²
-                {d.snow_line_altitude_m && <span className="text-slate-500 ml-2">SLA: {d.snow_line_altitude_m}m</span>}
-              </span>
-            </div>
-            <div className="w-full h-4 bg-white/5 rounded overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${barWidth}%` }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                className="h-full rounded group-hover:brightness-125 transition-all"
-                style={{ backgroundColor: color }}
-              />
-            </div>
-          </div>
-        );
-      })}
+      {/* SVG Line/Area Chart */}
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minHeight: 180 }}>
+        <defs>
+          <linearGradient id="snowAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines + Y labels */}
+        {yTicks.map((v, i) => (
+          <g key={i}>
+            <line x1={padL} y1={yScale(v)} x2={W - padR} y2={yScale(v)} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+            <text x={padL - 6} y={yScale(v) + 4} textAnchor="end" fill="#64748b" fontSize="9" fontFamily="monospace">
+              {v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0)}
+            </text>
+          </g>
+        ))}
+
+        {/* Area fill */}
+        <path d={areaPath} fill="url(#snowAreaGrad)" />
+
+        {/* Line */}
+        <polyline points={linePath} fill="none" stroke="#22d3ee" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Data points */}
+        {data.map((d, i) => (
+          <g key={d.year}>
+            <circle cx={xScale(i)} cy={yScale(d.area_km2)} r={i === peakIdx || i === minIdx ? 5 : 3.5}
+              fill={i === peakIdx ? '#22d3ee' : i === minIdx ? '#f87171' : '#0f172a'} stroke="#22d3ee" strokeWidth="2" />
+            {/* X-axis labels */}
+            <text x={xScale(i)} y={H - padB + 18} textAnchor="middle" fill="#64748b" fontSize="9" fontFamily="monospace">
+              {String(d.year).slice(-2)}
+            </text>
+          </g>
+        ))}
+
+        {/* Peak annotation */}
+        <text x={xScale(peakIdx)} y={yScale(data[peakIdx].area_km2) - 10} textAnchor="middle" fill="#22d3ee" fontSize="8" fontFamily="monospace" fontWeight="bold">
+          Peak: {data[peakIdx].area_km2} km²
+        </text>
+        {/* Min annotation */}
+        <text x={xScale(minIdx)} y={yScale(data[minIdx].area_km2) + 16} textAnchor="middle" fill="#f87171" fontSize="8" fontFamily="monospace" fontWeight="bold">
+          Min: {data[minIdx].area_km2} km²
+        </text>
+
+        {/* Y-axis label */}
+        <text x="12" y={padT + chartH / 2} textAnchor="middle" fill="#94a3b8" fontSize="8" fontFamily="monospace" transform={`rotate(-90, 12, ${padT + chartH / 2})`}>
+          Snow Area (km²)
+        </text>
+      </svg>
     </div>
   );
 }
